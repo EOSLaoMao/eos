@@ -95,6 +95,7 @@ namespace eosio { namespace chain {
     *   |- resource_limit_exception
     *   |- mongo_db_exception
     *   |- contract_api_exception
+    *   |- elasticsearch_exception
     */
 
     FC_DECLARE_DERIVED_EXCEPTION( chain_type_exception, chain_exception,
@@ -506,4 +507,11 @@ namespace eosio { namespace chain {
                                     3230002, "Database API Exception" )
       FC_DECLARE_DERIVED_EXCEPTION( arithmetic_exception,   contract_api_exception,
                                     3230003, "Arithmetic Exception" )
+
+   FC_DECLARE_DERIVED_EXCEPTION( elasticsearch_exception,    chain_exception,
+                                 3230004, "Elasticsearch exception" )
+      FC_DECLARE_DERIVED_EXCEPTION( elastic_connection_exception,   elasticsearch_exception,
+                                    3230005, "Fail to connect Elasticsearch" )
+      FC_DECLARE_DERIVED_EXCEPTION( response_code_exception,       elasticsearch_exception,
+                                    3230006, "Get non 200 response code from Elasticsearch" )
 } } // eosio::chain
