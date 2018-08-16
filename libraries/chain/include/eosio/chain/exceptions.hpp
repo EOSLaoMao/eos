@@ -513,5 +513,5 @@ namespace eosio { namespace chain {
       FC_DECLARE_DERIVED_EXCEPTION( elastic_connection_exception,   elasticsearch_exception,
                                     3230005, "Fail to connect Elasticsearch" )
       FC_DECLARE_DERIVED_EXCEPTION( response_code_exception,       elasticsearch_exception,
-                                    3230006, "Get non 200 response code from Elasticsearch" )
+                                    3230006, "Get non 2XX response code from Elasticsearch" )
 } } // eosio::chain

@@ -16,6 +16,19 @@ const static std::string elastic_mappings = R"(
                             "enabled": false
                         }
                     }
+                },
+                "createAt": {
+                    "type": "date"
+                }
+            }
+        },
+        "accounts": {
+            "properties": {
+                "createAt": {
+                    "type": "date"
+                },
+                "abi": {
+                    "enabled": false
                 }
             }
         }

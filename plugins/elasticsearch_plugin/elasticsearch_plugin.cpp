@@ -15,6 +15,7 @@
 #include <fc/variant_object.hpp>
 
 #include <boost/chrono.hpp>
+#include <boost/format.hpp>
 #include <boost/signals2/connection.hpp>
 #include <boost/thread/thread.hpp>
 #include <boost/thread/mutex.hpp>
@@ -36,7 +37,6 @@ using chain::permission_name;
 using chain::transaction;
 using chain::signed_transaction;
 using chain::signed_block;
-using chain::block_trace;
 using chain::transaction_id_type;
 using chain::packed_transaction;
 
@@ -67,8 +67,15 @@ public:
    void process_irreversible_block(const chain::block_state_ptr&);
    void _process_irreversible_block(const chain::block_state_ptr&);
 
+   optional<abi_serializer> get_abi_serializer( account_name n );
+   template<typename T> fc::variant to_variant_with_abi( const T& obj );
+   bool search_abi_by_account(fc::variant &v, const std::string &name);
+   void purge_abi_cache();
+
    void init();
    void delete_index();
+
+   template<typename Queue, typename Entry> void queue(Queue& queue, const Entry& e);
 
    bool configured{false};
    bool delete_index_on_startup{false};
@@ -77,7 +84,9 @@ public:
 
    std::shared_ptr<elasticsearch_helper> elastic_helper;
 
-   size_t queue_size = 0;
+   size_t max_queue_size = 0;
+   int queue_sleep_time = 0;
+   size_t abi_cache_size = 0;
    std::deque<chain::transaction_metadata_ptr> transaction_metadata_queue;
    std::deque<chain::transaction_metadata_ptr> transaction_metadata_process_queue;
    std::deque<chain::transaction_trace_ptr> transaction_trace_queue;
@@ -93,6 +102,24 @@ public:
    boost::atomic<bool> startup{true};
    fc::optional<chain::chain_id_type> chain_id;
    fc::microseconds abi_serializer_max_time;
+
+   struct by_account;
+   struct by_last_access;
+
+   struct abi_cache {
+      account_name                     account;
+      fc::time_point                   last_accessed;
+      fc::optional<abi_serializer>     serializer;
+   };
+
+   typedef boost::multi_index_container<abi_cache,
+         indexed_by<
+               ordered_unique< tag<by_account>,  member<abi_cache,account_name,&abi_cache::account> >,
+               ordered_non_unique< tag<by_last_access>,  member<abi_cache,fc::time_point,&abi_cache::last_accessed> >
+         >
+   > abi_cache_index_t;
+
+   abi_cache_index_t abi_cache_index;
 
    static const account_name newaccount;
    static const account_name setabi;
@@ -135,36 +162,30 @@ elasticsearch_plugin_impl::~elasticsearch_plugin_impl()
    }
 }
 
-namespace {
-
 template<typename Queue, typename Entry>
-void queue(boost::mutex& mtx, boost::condition_variable& condition, Queue& queue, const Entry& e, size_t queue_size) {
-   int sleep_time = 100;
-   size_t last_queue_size = 0;
-   boost::mutex::scoped_lock lock(mtx);
-   if (queue.size() > queue_size) {
+void elasticsearch_plugin_impl::queue( Queue& queue, const Entry& e ) {
+   boost::mutex::scoped_lock lock( mtx );
+   auto queue_size = queue.size();
+   if( queue_size > max_queue_size ) {
       lock.unlock();
       condition.notify_one();
-      if (last_queue_size < queue.size()) {
-         sleep_time += 100;
-      } else {
-         sleep_time -= 100;
-         if (sleep_time < 0) sleep_time = 100;
-      }
-      last_queue_size = queue.size();
-      boost::this_thread::sleep_for(boost::chrono::milliseconds(sleep_time));
+      queue_sleep_time += 10;
+      if( queue_sleep_time > 1000 )
+         wlog("queue size: ${q}", ("q", queue_size));
+      boost::this_thread::sleep_for( boost::chrono::milliseconds( queue_sleep_time ));
       lock.lock();
+   } else {
+      queue_sleep_time -= 10;
+      if( queue_sleep_time < 0 ) queue_sleep_time = 0;
    }
-   queue.emplace_back(e);
+   queue.emplace_back( e );
    lock.unlock();
    condition.notify_one();
 }
 
-}
-
 void elasticsearch_plugin_impl::accepted_transaction( const chain::transaction_metadata_ptr& t ) {
    try {
-      queue( mtx, condition, transaction_metadata_queue, t, queue_size );
+      queue( transaction_metadata_queue, t );
    } catch (fc::exception& e) {
       elog("FC Exception while accepted_transaction ${e}", ("e", e.to_string()));
    } catch (std::exception& e) {
@@ -176,7 +197,7 @@ void elasticsearch_plugin_impl::accepted_transaction( const chain::transaction_m
 
 void elasticsearch_plugin_impl::applied_transaction( const chain::transaction_trace_ptr& t ) {
    try {
-      queue( mtx, condition, transaction_trace_queue, t, queue_size );
+      queue( transaction_trace_queue, t );
    } catch (fc::exception& e) {
       elog("FC Exception while applied_transaction ${e}", ("e", e.to_string()));
    } catch (std::exception& e) {
@@ -188,7 +209,7 @@ void elasticsearch_plugin_impl::applied_transaction( const chain::transaction_tr
 
 void elasticsearch_plugin_impl::applied_irreversible_block( const chain::block_state_ptr& bs ) {
    try {
-      queue( mtx, condition, irreversible_block_state_queue, bs, queue_size );
+      queue( irreversible_block_state_queue, bs );
    } catch (fc::exception& e) {
       elog("FC Exception while applied_irreversible_block ${e}", ("e", e.to_string()));
    } catch (std::exception& e) {
@@ -200,7 +221,7 @@ void elasticsearch_plugin_impl::applied_irreversible_block( const chain::block_s
 
 void elasticsearch_plugin_impl::accepted_block( const chain::block_state_ptr& bs ) {
    try {
-      queue( mtx, condition, block_state_queue, bs, queue_size );
+      queue( block_state_queue, bs );
    } catch (fc::exception& e) {
       elog("FC Exception while accepted_block ${e}", ("e", e.to_string()));
    } catch (std::exception& e) {
@@ -209,6 +230,109 @@ void elasticsearch_plugin_impl::accepted_block( const chain::block_state_ptr& bs
       elog("Unknown exception while accepted_block");
    }
 }
+
+void elasticsearch_plugin_impl::purge_abi_cache() {
+   if( abi_cache_index.size() < abi_cache_size ) return;
+
+   // remove the oldest (smallest) last accessed
+   auto& idx = abi_cache_index.get<by_last_access>();
+   auto itr = idx.begin();
+   if( itr != idx.end() ) {
+      idx.erase( itr );
+   }
+}
+
+bool elasticsearch_plugin_impl::search_abi_by_account(fc::variant &v, const std::string &name) {
+   fc::variant res;
+   std::string query = boost::str(boost::format(R"({"query" : { "term" : { "name" : "%1%" }}})") % name);
+   elastic_helper->search(res, accounts_type, query);
+   if(res["hits"]["total"] != 1) return false;
+
+   size_t pos = 0;
+   try {
+      v = res["hits"]["hits"][pos]["_source"]["abi"];
+   } catch( ... ) {
+      return false;
+   }
+
+   return true;
+}
+
+optional<abi_serializer> elasticsearch_plugin_impl::get_abi_serializer( account_name n ) {
+   if( n.good()) {
+      try {
+
+         auto itr = abi_cache_index.find( n );
+         if( itr != abi_cache_index.end() ) {
+            abi_cache_index.modify( itr, []( auto& entry ) {
+               entry.last_accessed = fc::time_point::now();
+            });
+
+            return itr->serializer;
+         }
+
+         fc::variant abi_v;
+         if(search_abi_by_account(abi_v, n.to_string())) {
+            abi_def abi;
+            try {
+               abi = abi_v.as<abi_def>();
+            } catch (...) {
+               ilog( "Unable to convert account abi to abi_def for ${n}", ( "n", n ));
+               return optional<abi_serializer>();
+            }
+
+            purge_abi_cache(); // make room if necessary
+            abi_cache entry;
+            entry.account = n;
+            entry.last_accessed = fc::time_point::now();
+            abi_serializer abis;
+            if( n == chain::config::system_account_name ) {
+               // redefine eosio setabi.abi from bytes to abi_def
+               // Done so that abi is stored as abi_def in mongo instead of as bytes
+               auto itr = std::find_if( abi.structs.begin(), abi.structs.end(),
+                                          []( const auto& s ) { return s.name == "setabi"; } );
+               if( itr != abi.structs.end() ) {
+                  auto itr2 = std::find_if( itr->fields.begin(), itr->fields.end(),
+                                             []( const auto& f ) { return f.name == "abi"; } );
+                  if( itr2 != itr->fields.end() ) {
+                     if( itr2->type == "bytes" ) {
+                        itr2->type = "abi_def";
+                        // unpack setabi.abi as abi_def instead of as bytes
+                        abis.add_specialized_unpack_pack( "abi_def",
+                              std::make_pair<abi_serializer::unpack_function, abi_serializer::pack_function>(
+                                    []( fc::datastream<const char*>& stream, bool is_array, bool is_optional ) -> fc::variant {
+                                       EOS_ASSERT( !is_array && !is_optional, chain::mongo_db_exception, "unexpected abi_def");
+                                       chain::bytes temp;
+                                       fc::raw::unpack( stream, temp );
+                                       return fc::variant( fc::raw::unpack<abi_def>( temp ) );
+                                    },
+                                    []( const fc::variant& var, fc::datastream<char*>& ds, bool is_array, bool is_optional ) {
+                                       EOS_ASSERT( false, chain::mongo_db_exception, "never called" );
+                                    }
+                              ) );
+                     }
+                  }
+               }
+            }
+            abis.set_abi( abi, abi_serializer_max_time );
+            entry.serializer.emplace( std::move( abis ) );
+            abi_cache_index.insert( entry );
+            return entry.serializer;
+         }
+      } FC_CAPTURE_AND_LOG((n))
+   }
+   return optional<abi_serializer>();
+}
+
+template<typename T>
+fc::variant elasticsearch_plugin_impl::to_variant_with_abi( const T& obj ) {
+   fc::variant pretty_output;
+   abi_serializer::to_variant( obj, pretty_output,
+                               [&]( account_name n ) { return get_abi_serializer( n ); },
+                               abi_serializer_max_time );
+   return pretty_output;
+}
+
 
 void elasticsearch_plugin_impl::process_accepted_transaction( const chain::transaction_metadata_ptr& t ) {
    try {
@@ -280,20 +404,19 @@ void elasticsearch_plugin_impl::_process_accepted_block( const chain::block_stat
    auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
          std::chrono::microseconds{fc::time_point::now().time_since_epoch().count()});
 
-   fc::mutable_variant_object block_states_doc;
-   block_states_doc["block_num"] = static_cast<int32_t>(block_num);
-   block_states_doc["block_id"] = block_id_str;
-   block_states_doc["validated"] = bs->validated;
-   block_states_doc["in_current_chain"] = bs->in_current_chain;
-   block_states_doc["block_header_state"] = bs;
-   block_states_doc["createAt"] = now.count();
+   fc::mutable_variant_object block_state_doc;
+   block_state_doc["block_num"] = static_cast<int32_t>(block_num);
+   block_state_doc["block_id"] = block_id_str;
+   block_state_doc["validated"] = bs->validated;
+   block_state_doc["in_current_chain"] = bs->in_current_chain;
+   block_state_doc["block_header_state"] = bs;
+   block_state_doc["createAt"] = now.count();
 
-   auto block_states_json = fc::json::to_pretty_string( block_states_doc );
+   auto block_states_json = fc::json::to_string( block_state_doc );
 
    std::cout << block_states_json << std::endl;
 
-   elastic_helper->update(block_states_type, block_states_json);
-
+   elastic_helper->index(block_states_type, block_states_json);
 
    fc::mutable_variant_object block_doc;
 
@@ -301,16 +424,12 @@ void elasticsearch_plugin_impl::_process_accepted_block( const chain::block_stat
    block_doc["block_id"] = block_id_str;
    block_doc["irreversible"] = false;
 
-   // TODO: to_variant_with_abi
-   // block_doc["block"] = bs->block;
+   block_doc["block"] = to_variant_with_abi( *bs->block );
    block_doc["createAt"] = now.count();
 
-   auto block_json = fc::json::to_pretty_string( block_doc );
+   auto block_json = fc::json::to_string( block_doc );
 
-   std::cout << block_json << std::endl;
-
-   elastic_helper->update(blocks_type, block_json);
-
+   elastic_helper->index(blocks_type, block_json);
 
 }
 
@@ -350,42 +469,60 @@ void elasticsearch_plugin_impl::consume_blocks() {
 
          lock.unlock();
 
-         // warn if queue size greater than 75%
-         if( transaction_metadata_size > (queue_size * 0.75) ||
-             transaction_trace_size > (queue_size * 0.75) ||
-             block_state_size > (queue_size * 0.75) ||
-             irreversible_block_size > (queue_size * 0.75)) {
-            wlog("queue size: ${q}", ("q", transaction_metadata_size + transaction_trace_size + block_state_size + irreversible_block_size));
-         } else if (done) {
+         if (done) {
             ilog("draining queue, size: ${q}", ("q", transaction_metadata_size + transaction_trace_size + block_state_size + irreversible_block_size));
          }
 
          // process transactions
-         while (!transaction_metadata_process_queue.empty()) {
-            const auto& t = transaction_metadata_process_queue.front();
-            process_accepted_transaction(t);
-            transaction_metadata_process_queue.pop_front();
-         }
-
+         auto start_time = fc::time_point::now();
+         auto size = transaction_trace_process_queue.size();
          while (!transaction_trace_process_queue.empty()) {
             const auto& t = transaction_trace_process_queue.front();
             process_applied_transaction(t);
             transaction_trace_process_queue.pop_front();
          }
+         auto time = fc::time_point::now() - start_time;
+         auto per = size > 0 ? time.count()/size : 0;
+         if( time > fc::microseconds(500000) ) // reduce logging, .5 secs
+            ilog( "process_applied_transaction,  time per: ${p}, size: ${s}, time: ${t}", ("s", size)("t", time)("p", per) );
+
+         start_time = fc::time_point::now();
+         size = transaction_metadata_process_queue.size();
+         while (!transaction_metadata_process_queue.empty()) {
+            const auto& t = transaction_metadata_process_queue.front();
+            process_accepted_transaction(t);
+            transaction_metadata_process_queue.pop_front();
+         }
+         time = fc::time_point::now() - start_time;
+         per = size > 0 ? time.count()/size : 0;
+         if( time > fc::microseconds(500000) ) // reduce logging, .5 secs
+            ilog( "process_accepted_transaction, time per: ${p}, size: ${s}, time: ${t}", ("s", size)( "t", time )( "p", per ));
 
          // process blocks
+         start_time = fc::time_point::now();
+         size = block_state_process_queue.size();
          while (!block_state_process_queue.empty()) {
             const auto& bs = block_state_process_queue.front();
             process_accepted_block( bs );
             block_state_process_queue.pop_front();
          }
+         time = fc::time_point::now() - start_time;
+         per = size > 0 ? time.count()/size : 0;
+         if( time > fc::microseconds(500000) ) // reduce logging, .5 secs
+            ilog( "process_accepted_block,       time per: ${p}, size: ${s}, time: ${t}", ("s", size)("t", time)("p", per) );
 
          // process irreversible blocks
+         start_time = fc::time_point::now();
+         size = irreversible_block_state_process_queue.size();
          while (!irreversible_block_state_process_queue.empty()) {
             const auto& bs = irreversible_block_state_process_queue.front();
             process_irreversible_block(bs);
             irreversible_block_state_process_queue.pop_front();
          }
+         time = fc::time_point::now() - start_time;
+         per = size > 0 ? time.count()/size : 0;
+         if( time > fc::microseconds(500000) ) // reduce logging, .5 secs
+            ilog( "process_irreversible_block,   time per: ${p}, size: ${s}, time: ${t}", ("s", size)("t", time)("p", per) );
 
          if( transaction_metadata_size == 0 &&
              transaction_trace_size == 0 &&
@@ -405,6 +542,7 @@ void elasticsearch_plugin_impl::consume_blocks() {
    }
 }
 
+
 void elasticsearch_plugin_impl::delete_index() {
    ilog("drop elasticsearch index");
    elastic_helper->delete_index();
@@ -412,7 +550,19 @@ void elasticsearch_plugin_impl::delete_index() {
 
 void elasticsearch_plugin_impl::init() {
    ilog("create elasticsearch index");
-   elastic_helper->init_index(elastic_mappings);
+   elastic_helper->init_index( elastic_mappings );
+
+   if (elastic_helper->count_doc(accounts_type) == 0) {
+      auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::microseconds{fc::time_point::now().time_since_epoch().count()});
+      
+      fc::mutable_variant_object account_doc;
+      account_doc["name"] = name( chain::config::system_account_name ).to_string();
+      account_doc["createAt"] = now.count();
+
+      auto account_json = fc::json::to_string( account_doc );
+      elastic_helper->index( accounts_type, account_json );
+   }
 
    ilog("starting elasticsearch plugin thread");
    consume_thread = boost::thread([this] { consume_blocks(); });
@@ -437,7 +587,9 @@ void elasticsearch_plugin::plugin_initialize(const variables_map& options) {
          // Handle the option
       }
 
-      my->queue_size = 256;
+      my->max_queue_size = 1024;
+
+      my->abi_cache_size = 2048;
 
       my->abi_serializer_max_time = app().get_plugin<chain_plugin>().get_abi_serializer_max_time();
 
