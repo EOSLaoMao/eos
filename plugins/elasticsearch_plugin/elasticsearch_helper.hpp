@@ -6,6 +6,7 @@
 #pragma once
 #include <vector>
 #include <appbase/application.hpp>
+#include <fc/variant.hpp>
 #include <elasticlient/client.h>
 
 namespace eosio {
@@ -18,7 +19,9 @@ public:
 
    void delete_index();
    void init_index(const std::string &mappings);
-   void update(const std::string &type, const std::string &body);
+   void index(const std::string &type, const std::string &body);
+   uint64_t count_doc(const std::string &type, const std::string &query = std::string());
+   void search(fc::variant& v, const std::string &type, const std::string &query);
 
    std::string index_name;
    elasticlient::Client client;
