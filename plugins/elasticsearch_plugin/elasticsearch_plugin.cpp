@@ -121,26 +121,38 @@ public:
 
    abi_cache_index_t abi_cache_index;
 
-   static const account_name newaccount;
-   static const account_name setabi;
+   static const action_name newaccount;
+   static const action_name setabi;
+   static const action_name updateauth;
+   static const action_name deleteauth;
+   static const permission_name owner;
+   static const permission_name active;
 
    static const std::string block_states_type;
    static const std::string blocks_type;
    static const std::string trans_type;
    static const std::string trans_traces_type;
-   static const std::string actions_type;
+   static const std::string action_traces_type;
    static const std::string accounts_type;
+   static const std::string pub_keys_type;
+   static const std::string account_controls_type;
 };
 
-const account_name elasticsearch_plugin_impl::newaccount = "newaccount";
-const account_name elasticsearch_plugin_impl::setabi = "setabi";
+const action_name elasticsearch_plugin_impl::newaccount = chain::newaccount::get_name();
+const action_name elasticsearch_plugin_impl::setabi = chain::setabi::get_name();
+const action_name elasticsearch_plugin_impl::updateauth = chain::updateauth::get_name();
+const action_name elasticsearch_plugin_impl::deleteauth = chain::deleteauth::get_name();
+const permission_name elasticsearch_plugin_impl::owner = chain::config::owner_name;
+const permission_name elasticsearch_plugin_impl::active = chain::config::active_name;
 
 const std::string elasticsearch_plugin_impl::block_states_type = "block_states";
 const std::string elasticsearch_plugin_impl::blocks_type = "blocks";
 const std::string elasticsearch_plugin_impl::trans_type = "transactions";
 const std::string elasticsearch_plugin_impl::trans_traces_type = "transaction_traces";
-const std::string elasticsearch_plugin_impl::actions_type = "actions";
+const std::string elasticsearch_plugin_impl::action_traces_type = "action_traces";
 const std::string elasticsearch_plugin_impl::accounts_type = "accounts";
+const std::string elasticsearch_plugin_impl::pub_keys_type = "pub_keys";
+const std::string elasticsearch_plugin_impl::account_controls_type = "account_controls";
 
 
 elasticsearch_plugin_impl::elasticsearch_plugin_impl()
@@ -246,6 +258,7 @@ bool elasticsearch_plugin_impl::search_abi_by_account(fc::variant &v, const std:
    fc::variant res;
    std::string query = boost::str(boost::format(R"({"query" : { "term" : { "name" : "%1%" }}})") % name);
    elastic_helper->search(res, accounts_type, query);
+
    if(res["hits"]["total"] != 1) return false;
 
    size_t pos = 0;
@@ -337,7 +350,7 @@ fc::variant elasticsearch_plugin_impl::to_variant_with_abi( const T& obj ) {
 void elasticsearch_plugin_impl::process_accepted_transaction( const chain::transaction_metadata_ptr& t ) {
    try {
       // always call since we need to capture setabi on accounts even if not storing transactions
-      // _process_accepted_transaction(t);
+      _process_accepted_transaction(t);
    } catch (fc::exception& e) {
       elog("FC Exception while processing accepted transaction metadata: ${e}", ("e", e.to_detail_string()));
    } catch (std::exception& e) {
@@ -394,9 +407,43 @@ void elasticsearch_plugin_impl::process_accepted_block( const chain::block_state
    }
 }
 
+
+void handle_elasticsearch_exception( const std::string& desc, int line_num ) {
+   bool shutdown = true;
+   try {
+      try {
+         throw;
+      } catch( elasticlient::ConnectionException& e) {
+         elog( "elasticsearch connection error, ${desc}, line ${line}, ${what}",
+               ("desc", desc)( "line", line_num )( "what", e.what() ));
+      } catch( chain::response_code_exception& e) {
+         elog( "elasticsearch exception, ${desc}, line ${line}, ${what}",
+               ("desc", desc)( "line", line_num )( "what", e.what() ));
+       } catch( fc::exception& er ) {
+         elog( "elasticsearch fc exception, ${desc}, line ${line}, ${details}",
+               ("desc", desc)( "line", line_num )( "details", er.to_detail_string()));
+      } catch( const std::exception& e ) {
+         elog( "elasticsearch std exception, ${desc}, line ${line}, ${what}",
+               ("desc", desc)( "line", line_num )( "what", e.what()));
+      } catch( ... ) {
+         elog( "elasticsearch unknown exception, ${desc}, line ${line_nun}", ("desc", desc)( "line_num", line_num ));
+      }
+   } catch (...) {
+      std::cerr << "Exception attempting to handle exception for " << desc << " " << line_num << std::endl;
+   }
+
+   if( shutdown ) {
+      // shutdown if elasticsearch failed to provide opportunity to fix issue and restart
+      app().quit();
+   }
+}
+
+
 void elasticsearch_plugin_impl::_process_accepted_block( const chain::block_state_ptr& bs ) {
 
    auto block_num = bs->block_num;
+   if( block_num % 1000 == 0 )
+      ilog( "block_num: ${b}", ("b", block_num) );
    const auto block_id = bs->id;
    const auto block_id_str = block_id.str();
    const auto prev_block_id_str = bs->block->previous.str();
@@ -414,9 +461,11 @@ void elasticsearch_plugin_impl::_process_accepted_block( const chain::block_stat
 
    auto block_states_json = fc::json::to_string( block_state_doc );
 
-   std::cout << block_states_json << std::endl;
-
-   elastic_helper->index(block_states_type, block_states_json);
+   try {
+      elastic_helper->index(block_states_type, block_states_json);
+   } catch( ... ) {
+      handle_elasticsearch_exception( "block_states index:" + block_states_json, __LINE__ );
+   }
 
    fc::mutable_variant_object block_doc;
 
@@ -429,9 +478,52 @@ void elasticsearch_plugin_impl::_process_accepted_block( const chain::block_stat
 
    auto block_json = fc::json::to_string( block_doc );
 
-   elastic_helper->index(blocks_type, block_json);
+   try {
+      elastic_helper->index(blocks_type, block_json);
+   } catch( ... ) {
+      handle_elasticsearch_exception( "block_states index:" + block_json, __LINE__ );
+   }
 
 }
+
+void elasticsearch_plugin_impl::_process_accepted_transaction( const chain::transaction_metadata_ptr& t ) {
+   fc::mutable_variant_object trans_doc;
+
+   auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
+         std::chrono::microseconds{fc::time_point::now().time_since_epoch().count()} );
+
+   const auto& trx_id = t->id;
+   const auto trx_id_str = trx_id.str();
+   const auto& trx = t->trx;
+
+   fc::from_variant( to_variant_with_abi( trx ), trans_doc );
+   trans_doc["trx_id"] = trx_id_str;
+
+   fc::variant signing_keys;
+   if( t->signing_keys.valid() ) {
+      signing_keys = t->signing_keys->second;
+   } else {
+      signing_keys = trx.get_signature_keys( *chain_id, false, false );
+   }
+
+   if( !signing_keys.is_null() ) {
+      trans_doc["signing_keys"] = signing_keys;
+   }
+
+   trans_doc["accepted"] = t->accepted;
+   trans_doc["implicit"] = t->implicit;
+   trans_doc["scheduled"] = t->scheduled;
+   trans_doc["createdAt"] = now.count();
+
+   auto trans_json = fc::json::to_string( trans_doc );
+
+   try {
+      elastic_helper->index(trans_type, trans_json);
+   } catch( ... ) {
+      handle_elasticsearch_exception( "trans index:" + trans_json, __LINE__ );
+   }
+}
+
 
 void elasticsearch_plugin_impl::consume_blocks() {
    try {
