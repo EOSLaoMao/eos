@@ -14,6 +14,13 @@ const static std::string elastic_mappings = R"(
                         },
                         "producer_to_last_implied_irb": {
                             "enabled": false
+                        },
+                        "block": {
+                            "properties": {
+                                "transactions": {
+                                    "enabled": false
+                                }
+                            }
                         }
                     }
                 },
@@ -34,6 +41,7 @@ const static std::string elastic_mappings = R"(
         }
     }
 }
+
 )";
 
 }
