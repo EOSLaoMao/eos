@@ -38,10 +38,23 @@ const static std::string elastic_mappings = R"(
                     "enabled": false
                 }
             }
+        },
+        "transaction_traces": {
+            "properties": {
+                "action_traces": {
+                    "enabled": false
+                }
+            }
+        },
+        "action_traces": {
+            "properties": {
+                "receipt": {
+                    "enabled": false
+                }
+            }
         }
     }
 }
-
 )";
 
 }
