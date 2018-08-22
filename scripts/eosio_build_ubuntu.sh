@@ -421,6 +421,74 @@ mongodconf
 		printf "\\tMongo C++ driver found at /usr/local/lib/libmongocxx-static.a.\\n"
 	fi
 
+	printf "\\n\\tChecking elasticlient installation.\\n"
+	if [ ! -e "/usr/local/lib/libelasticlient.so" ]; then
+		printf "\\tInstalling elasticlient.\\n"
+		if ! cd "${TEMP_DIR}"
+		then
+			printf "\\n\\tUnable to cd into directory %s.\\n" "${TEMP_DIR}"
+			printf "\\n\\tExiting now.\\n"
+			exit 1;
+		fi
+		if ! git clone https://github.com/WLBF/elasticlient.git
+		then
+			printf "\\tUnable to clone repo elasticlient @ https://github.com/WLBF/elasticlient.git.\\n"
+			printf "\\tExiting now.\\n\\n"
+			exit 1;
+		fi
+		if ! cd "${TEMP_DIR}/elasticlient"
+		then
+			printf "\\n\\tUnable to cd into directory %s.\\n" "${TEMP_DIR}/elasticlient"
+			printf "\\n\\tExiting now.\\n"
+			exit 1;
+		fi
+		if ! git submodule update --init --recursive
+		then
+			printf "\\tUnable to execute git submodule update --init --recursive.\\n"
+			printf "\\tExiting now.\\n\\n"
+			exit 1;
+		fi
+		if ! cmake -j"${JOBS}" . -DBUILD_ELASTICLIENT_TESTS=NO -DBUILD_ELASTICLIENT_EXAMPLE=NO
+		then
+			printf "\\tError running cmake of elasticlient.\\n"
+			printf "\\tExiting now.\\n\\n"
+			exit 1;
+		fi
+		if ! make -j"${JOBS}"
+		then
+			printf "\\tError compiling elasticlient.\\n"
+			printf "\\tExiting now.\\n\\n"
+			exit 1;
+		fi
+		if ! sudo make install
+		then
+			printf "\\tError installing elasticlient.\\n"
+			printf "\\tExiting now.\\n\\n"
+			exit 1;
+		fi
+		if ! sudo cp -r "external/cpr/include/cpr" "/usr/local/include/cpr"
+		then
+			printf "\\tUnable to copy dir %s to /usr/local/include/cpr.\\n" "${TEMP_DIR}/elasticlient/external/cpr/include/cpr"
+			printf "\\tExiting now.\\n\\n"
+			exit 1;
+		fi
+		if ! sudo cp "lib/libcpr.so" "/usr/local/lib/libcpr.so"
+		then
+			printf "\\tUnable to copy %s to /usr/local/lib/libcpr.so.\\n" "${TEMP_DIR}/elasticlient/lib/libcpr.so"
+			printf "\\tExiting now.\\n\\n"
+			exit 1;
+		fi
+		if ! rm -rf "${TEMP_DIR}/elasticlient"
+		then
+			printf "\\tError removing directory %s.\\n" "${TEMP_DIR}/elasticlient"
+			printf "\\tExiting now.\\n\\n"
+			exit 1;
+		fi
+		printf "\\n\\telasticlient successfully installed @ /usr/local/lib.\\n\\n"
+	else
+		printf "\\telasticlient found @ /usr/local/lib.\\n"
+	fi
+
 	printf "\\n\\tChecking secp256k1-zkp installation.\\n"
     # install secp256k1-zkp (Cryptonomex branch)
     if [ ! -e "/usr/local/lib/libsecp256k1.a" ]; then
