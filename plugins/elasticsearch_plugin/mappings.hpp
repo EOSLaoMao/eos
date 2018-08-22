@@ -5,6 +5,16 @@ namespace eosio {
 const static std::string elastic_mappings = R"(
 {
     "mappings": {
+        "blocks": {
+            "properties": {
+                "createAt": {
+                    "type": "date"
+                },
+                "block": {
+                    "enabled": false
+                }
+            }
+        },
         "block_states": {
             "properties": {
                 "block_header_state": {
@@ -39,8 +49,18 @@ const static std::string elastic_mappings = R"(
                 }
             }
         },
+        "transactions": {
+            "properties": {
+                "actions": {
+                    "enabled": false
+                }
+            }
+        },
         "transaction_traces": {
             "properties": {
+                "createAt": {
+                    "type": "date"
+                },
                 "action_traces": {
                     "enabled": false
                 }
@@ -48,7 +68,13 @@ const static std::string elastic_mappings = R"(
         },
         "action_traces": {
             "properties": {
+                "createAt": {
+                    "type": "date"
+                },
                 "receipt": {
+                    "enabled": false
+                },
+                "act": {
                     "enabled": false
                 }
             }

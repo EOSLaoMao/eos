@@ -66,4 +66,12 @@ void elasticsearch_client::bulk_perform(elasticlient::SameIndexBulkData &bulk)
    EOS_ASSERT(errors == 0, chain::bulk_fail_exception, "bulk perform error num: ${errors}", ("errors", errors));
 }
 
+void elasticsearch_client::update(const std::string &type, const std::string &id, const std::string &doc)
+{
+   auto url = boost::str(boost::format("%1%/%2%/%3%/_update") % index_name % type % id);
+   auto query = boost::str(boost::format(R"({ "doc": %1% })") % doc);
+   cpr::Response resp = client.performRequest(elasticlient::Client::HTTPMethod::POST, url, query);
+   EOS_ASSERT(is_2xx(resp.status_code), chain::response_code_exception, "${code} ${text}", ("code", resp.status_code)("text", resp.text));
+}
+
 } // namespace eosio
