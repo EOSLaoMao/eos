@@ -444,7 +444,7 @@ void elasticsearch_plugin_impl::process_applied_transaction( const chain::transa
 void elasticsearch_plugin_impl::process_irreversible_block(const chain::block_state_ptr& bs) {
   try {
      if( start_block_reached ) {
-      //   _process_irreversible_block( bs );
+         _process_irreversible_block( bs );
      }
   } catch (fc::exception& e) {
      elog("FC Exception while processing irreversible block: ${e}", ("e", e.to_detail_string()));
@@ -657,7 +657,7 @@ bool elasticsearch_plugin_impl::find_block( fc::variant& v, const std::string& i
    if(res["hits"]["total"] != 1) return false;
 
    size_t pos = 0;
-   v = res["hits"]["hits"][pos]["_source"];
+   v = res["hits"]["hits"][pos];
 
    return true;
 }
@@ -712,14 +712,12 @@ void elasticsearch_plugin_impl::update_account(const chain::action& act)
             fc::mutable_variant_object doc;
             abi_def abi_def = fc::raw::unpack<chain::abi_def>( setabi.abi );
 
-            doc["name"] = account["name"];
             doc["abi"] = abi_def;
             doc["updateAt"] = now.count();
-            doc["createAt"] = account["createAt"];
 
             auto json = fc::json::to_string( doc );
             try {
-               elastic_client->index(accounts_type, json, account["_id"].as_string());
+               elastic_client->update(accounts_type, account["_id"].as_string(), json);
             } catch( ... ) {
                handle_elasticsearch_exception( "update account", __LINE__ );
             }
@@ -801,9 +799,80 @@ void elasticsearch_plugin_impl::_process_accepted_block( const chain::block_stat
    try {
       elastic_client->index(blocks_type, block_json);
    } catch( ... ) {
-      handle_elasticsearch_exception( "block_states index:" + block_json, __LINE__ );
+      handle_elasticsearch_exception( "blocks index:" + block_json, __LINE__ );
+   }
+}
+
+void elasticsearch_plugin_impl::_process_irreversible_block(const chain::block_state_ptr& bs)
+{
+   const auto block_id = bs->block->id();
+   const auto block_id_str = block_id.str();
+   const auto block_num = bs->block->block_num();
+
+   auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
+         std::chrono::microseconds{fc::time_point::now().time_since_epoch().count()});
+
+   if( store_blocks ) {
+      fc::variant ir_block;
+      if( !find_block( ir_block, block_id_str ) ) {
+         _process_accepted_block( bs );
+         if( !find_block( ir_block, block_id_str ) ) return; // should never happen
+      }
+
+      fc::mutable_variant_object doc;
+      doc["irreversible"] = true;
+      doc["validated"] = bs->validated;
+      doc["in_current_chain"] = bs->in_current_chain;
+      doc["updatedAt"] = now.count();
+
+      auto json = fc::json::to_string(doc);
+
+      try {
+         elastic_client->update(blocks_type, ir_block["_id"].as_string(), json);
+      } catch( ... ) {
+         handle_elasticsearch_exception( "update block", __LINE__ );
+      }
    }
 
+   if( !store_transactions ) return;
+
+   bool transactions_in_block = false;
+
+   elasticlient::SameIndexBulkData bulk_trans(index_name);
+
+   for( const auto& receipt : bs->block->transactions ) {
+      string trx_id_str;
+      if( receipt.trx.contains<packed_transaction>() ) {
+         const auto& pt = receipt.trx.get<packed_transaction>();
+         // get id via get_raw_transaction() as packed_transaction.id() mutates internal transaction state
+         const auto& raw = pt.get_raw_transaction();
+         const auto& id = fc::raw::unpack<transaction>( raw ).id();
+         trx_id_str = id.str();
+      } else {
+         const auto& id = receipt.trx.get<transaction_id_type>();
+         trx_id_str = id.str();
+      }
+
+      fc::mutable_variant_object doc;
+      doc["irreversible"] = true;
+      doc["block_id"] = block_id_str;
+      doc["block_num"] = static_cast<int32_t>(block_num);
+      doc["updatedAt"] = now.count();
+
+      auto doc_json = fc::json::to_string(doc);
+      auto query = boost::str(boost::format(R"({ "doc": %1%})") % doc_json);
+
+      bulk_trans.createDocument(trans_type, trx_id_str, query);
+      transactions_in_block = true;
+   }
+
+   if( transactions_in_block ) {
+      try {
+         elastic_client->bulk_perform(bulk_trans);
+      } catch( ... ) {
+         handle_elasticsearch_exception( "bulk transaction update", __LINE__ );
+      }
+   }
 }
 
 void elasticsearch_plugin_impl::_process_accepted_transaction( const chain::transaction_metadata_ptr& t ) {
@@ -838,7 +907,7 @@ void elasticsearch_plugin_impl::_process_accepted_transaction( const chain::tran
    auto trans_json = fc::json::to_string( trans_doc );
 
    try {
-      elastic_client->index(trans_type, trans_json);
+      elastic_client->index(trans_type, trans_json, trx_id_str);
    } catch( ... ) {
       handle_elasticsearch_exception( "trans index:" + trans_json, __LINE__ );
    }
@@ -866,7 +935,7 @@ void elasticsearch_plugin_impl::_process_applied_transaction( const chain::trans
       try {
          elastic_client->bulk_perform(bulk_action_traces);
       } catch( ... ) {
-         handle_elasticsearch_exception( "action traces:" + bulk_action_traces.body(), __LINE__ );
+         handle_elasticsearch_exception( "action traces", __LINE__ );
       }
    }
 
@@ -1034,7 +1103,7 @@ void elasticsearch_plugin::plugin_initialize(const variables_map& options) {
          // Handle the option
       }
 
-      my->max_queue_size = 1024;
+      my->max_queue_size = 256;
 
       my->abi_cache_size = 2048;
 

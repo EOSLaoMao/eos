@@ -20,6 +20,7 @@ public:
    void search(fc::variant& v, const std::string &type, const std::string &query);
    void delete_by_query(const std::string &type, const std::string &query);
    void bulk_perform(elasticlient::SameIndexBulkData &bulk);
+   void update(const std::string &type, const std::string &id, const std::string &doc);
 
    std::string index_name;
    elasticlient::Client client;
