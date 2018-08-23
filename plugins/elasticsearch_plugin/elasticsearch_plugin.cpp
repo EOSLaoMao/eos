@@ -16,10 +16,12 @@
 
 #include <boost/chrono.hpp>
 #include <boost/format.hpp>
+#include <boost/algorithm/string.hpp>
 #include <boost/signals2/connection.hpp>
 #include <boost/thread/thread.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/condition_variable.hpp>
+
 
 #include <queue>
 
@@ -1091,62 +1093,155 @@ elasticsearch_plugin::~elasticsearch_plugin(){}
 
 void elasticsearch_plugin::set_program_options(options_description&, options_description& cfg) {
    cfg.add_options()
-         ("option-name", bpo::value<string>()->default_value("default value"),
-          "Option Description")
+         ("elastic-queue-size,q", bpo::value<uint32_t>()->default_value(512),
+         "The target queue size between nodeos and elasticsearch plugin thread.")
+         ("elastic-abi-cache-size", bpo::value<uint32_t>()->default_value(2048),
+          "The maximum size of the abi cache for serializing data.")
+         ("elastic-index-wipe", bpo::bool_switch()->default_value(false),
+         "Required with --replay-blockchain, --hard-replay-blockchain, or --delete-all-blocks to delete elasticsearch index."
+         "This option required to prevent accidental wipe of index.")
+         ("elastic-block-start", bpo::value<uint32_t>()->default_value(0),
+         "If specified then only abi data pushed to elasticsearch until specified block is reached.")
+         ("elastic-url,u", bpo::value<std::string>(),
+         "elasticsearch URL connection string If not specified then plugin is disabled.")
+         ("elastic-index-name", bpo::value<std::string>()->default_value("eos"),
+         "Index name of elasticsearch index for data store.")
+         ("elastic-store-blocks", bpo::value<bool>()->default_value(true),
+          "Enables storing blocks in elasticsearch.")
+         ("elastic-store-block-states", bpo::value<bool>()->default_value(true),
+          "Enables storing block state in elasticsearch.")
+         ("elastic-store-transactions", bpo::value<bool>()->default_value(true),
+          "Enables storing transactions in elasticsearch.")
+         ("elastic-store-transaction-traces", bpo::value<bool>()->default_value(true),
+          "Enables storing transaction traces in elasticsearch.")
+         ("elastic-store-action-traces", bpo::value<bool>()->default_value(true),
+          "Enables storing action traces in elasticsearch.")
+         ("elasticsearch-filter-on", bpo::value<vector<string>>()->composing(),
+          "elasticsearch: Track actions which match receiver:action:actor. Actor may be blank to include all. Receiver and Action may not be blank. Default is * include everything.")
+         ("elasticsearch-filter-out", bpo::value<vector<string>>()->composing(),
+          "elasticsearch: Do not track actions which match receiver:action:actor. Action and Actor both blank excludes all from reciever. Actor blank excludes all from reciever:action. Receiver may not be blank.")
          ;
 }
 
 void elasticsearch_plugin::plugin_initialize(const variables_map& options) {
-   ilog( "initializing elasticsearch_plugin" );
    try {
-      if( options.count( "option-name" )) {
-         // Handle the option
-      }
+      if( options.count( "elastic-url" )) {
+         ilog( "initializing elasticsearch_plugin" );
+         my->configured = true;
 
-      my->max_queue_size = 256;
+         if( options.count( "elastic-index-name" )) {
+            my->index_name = options.at( "elastic-index-name" ).as<std::string>();
+         }
 
-      my->abi_cache_size = 2048;
+         if( options.at( "replay-blockchain" ).as<bool>() || options.at( "hard-replay-blockchain" ).as<bool>() || options.at( "delete-all-blocks" ).as<bool>() ) {
+            if( options.at( "elastic-index-wipe" ).as<bool>()) {
+               ilog( "Wiping elascticsearch index on startup" );
+               my->delete_index_on_startup = true;
+            } else if( options.count( "elastic-block-start" ) == 0 ) {
+               EOS_ASSERT( false, chain::plugin_config_exception, "--elastic-index-wipe required with --replay-blockchain, --hard-replay-blockchain, or --delete-all-blocks"
+                                 " --elastic-index-wipe will remove EOS index from elasticsearch." );
+            }
+         }
 
-      my->abi_serializer_max_time = app().get_plugin<chain_plugin>().get_abi_serializer_max_time();
+         if( options.count( "abi-serializer-max-time-ms") == 0 ) {
+            EOS_ASSERT(false, chain::plugin_config_exception, "--abi-serializer-max-time-ms required as default value not appropriate for parsing full blocks");
+         }
+         my->abi_serializer_max_time = app().get_plugin<chain_plugin>().get_abi_serializer_max_time();
 
-      my->start_block_num = 0;
+         if( options.count( "elastic-queue-size" )) {
+            my->max_queue_size = options.at( "elastic-queue-size" ).as<uint32_t>();
+         }
+         if( options.count( "elastic-abi-cache-size" )) {
+            my->abi_cache_size = options.at( "elastic-abi-cache-size" ).as<uint32_t>();
+            EOS_ASSERT( my->abi_cache_size > 0, chain::plugin_config_exception, "elastic-abi-cache-size > 0 required" );
+         }
+         if( options.count( "elastic-block-start" )) {
+            my->start_block_num = options.at( "elastic-block-start" ).as<uint32_t>();
+         }
+         if( options.count( "elastic-store-blocks" )) {
+            my->store_blocks = options.at( "elastic-store-blocks" ).as<bool>();
+         }
+         if( options.count( "elastic-store-block-states" )) {
+            my->store_block_states = options.at( "elastic-store-block-states" ).as<bool>();
+         }
+         if( options.count( "elastic-store-transactions" )) {
+            my->store_transactions = options.at( "elastic-store-transactions" ).as<bool>();
+         }
+         if( options.count( "elastic-store-transaction-traces" )) {
+            my->store_transaction_traces = options.at( "elastic-store-transaction-traces" ).as<bool>();
+         }
+         if( options.count( "elastic-store-action-traces" )) {
+            my->store_action_traces = options.at( "elastic-store-action-traces" ).as<bool>();
+         }
+         if( options.count( "elastic-filter-on" )) {
+            auto fo = options.at( "elastic-filter-on" ).as<vector<string>>();
+            my->filter_on_star = false;
+            for( auto& s : fo ) {
+               if( s == "*" ) {
+                  my->filter_on_star = true;
+                  break;
+               }
+               std::vector<std::string> v;
+               boost::split( v, s, boost::is_any_of( ":" ));
+               EOS_ASSERT( v.size() == 3, fc::invalid_arg_exception, "Invalid value ${s} for --elastic-filter-on", ("s", s));
+               filter_entry fe{v[0], v[1], v[2]};
+               EOS_ASSERT( fe.receiver.value && fe.action.value, fc::invalid_arg_exception,
+                           "Invalid value ${s} for --elastic-filter-on", ("s", s));
+               my->filter_on.insert( fe );
+            }
+         } else {
+            my->filter_on_star = true;
+         }
+         if( options.count( "elastic-filter-out" )) {
+            auto fo = options.at( "elastic-filter-out" ).as<vector<string>>();
+            for( auto& s : fo ) {
+               std::vector<std::string> v;
+               boost::split( v, s, boost::is_any_of( ":" ));
+               EOS_ASSERT( v.size() == 3, fc::invalid_arg_exception, "Invalid value ${s} for --elastic-filter-out", ("s", s));
+               filter_entry fe{v[0], v[1], v[2]};
+               EOS_ASSERT( fe.receiver.value, fc::invalid_arg_exception,
+                           "Invalid value ${s} for --elastic-filter-out", ("s", s));
+               my->filter_out.insert( fe );
+            }
+         }
 
+         if( my->start_block_num == 0 ) {
+         my->start_block_reached = true;
+         }
 
-      if( my->start_block_num == 0 ) {
-        my->start_block_reached = true;
-      }
+         std::string url_str = options.at( "elastic-url" ).as<std::string>();
+         my->elastic_client = std::make_shared<elasticsearch_client>(std::vector<std::string>({url_str}), my->index_name);
 
-      my->delete_index_on_startup = true;
+         // hook up to signals on controller
+         chain_plugin* chain_plug = app().find_plugin<chain_plugin>();
+         EOS_ASSERT( chain_plug, chain::missing_chain_plugin_exception, ""  );
+         auto& chain = chain_plug->chain();
+         my->chain_id.emplace( chain.get_chain_id());
 
-      my->index_name = "eos";
-      my->elastic_client = std::make_shared<elasticsearch_client>(std::vector<std::string>({"http://localhost:9200/"}), "eos");
-
-      // hook up to signals on controller
-      chain_plugin* chain_plug = app().find_plugin<chain_plugin>();
-      EOS_ASSERT( chain_plug, chain::missing_chain_plugin_exception, ""  );
-      auto& chain = chain_plug->chain();
-      my->chain_id.emplace( chain.get_chain_id());
-
-      my->accepted_block_connection.emplace(
-         chain.accepted_block.connect( [&]( const chain::block_state_ptr& bs ) {
-         my->accepted_block( bs );
-      } ));
-      my->irreversible_block_connection.emplace(
-         chain.irreversible_block.connect( [&]( const chain::block_state_ptr& bs ) {
-            my->applied_irreversible_block( bs );
+         my->accepted_block_connection.emplace(
+            chain.accepted_block.connect( [&]( const chain::block_state_ptr& bs ) {
+            my->accepted_block( bs );
          } ));
-      my->accepted_transaction_connection.emplace(
-         chain.accepted_transaction.connect( [&]( const chain::transaction_metadata_ptr& t ) {
-            my->accepted_transaction( t );
-         } ));
-      my->applied_transaction_connection.emplace(
-         chain.applied_transaction.connect( [&]( const chain::transaction_trace_ptr& t ) {
-            my->applied_transaction( t );
-         } ));
-      if( my->delete_index_on_startup ) {
-         my->delete_index();
+         my->irreversible_block_connection.emplace(
+            chain.irreversible_block.connect( [&]( const chain::block_state_ptr& bs ) {
+               my->applied_irreversible_block( bs );
+            } ));
+         my->accepted_transaction_connection.emplace(
+            chain.accepted_transaction.connect( [&]( const chain::transaction_metadata_ptr& t ) {
+               my->accepted_transaction( t );
+            } ));
+         my->applied_transaction_connection.emplace(
+            chain.applied_transaction.connect( [&]( const chain::transaction_trace_ptr& t ) {
+               my->applied_transaction( t );
+            } ));
+         if( my->delete_index_on_startup ) {
+            my->delete_index();
+         }
+         my->init();
+      } else {
+         wlog( "eosio::elasticsearch_plugin configured, but no --elastic-url specified." );
+         wlog( "elasticsearch_plugin disabled." );
       }
-      my->init();
    }
    FC_LOG_AND_RETHROW()
 }
