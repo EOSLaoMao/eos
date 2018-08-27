@@ -50,6 +50,16 @@ RUN git clone --depth 1 --single-branch --branch release_40 https://github.com/l
     && cmake --build build --target install \
     && cd .. && rm -rf llvm
 
+RUN git clone https://github.com/WLBF/elasticlient.git \
+    && cd elasticlient \
+    && git submodule update --init --recursive \
+    && cmake -j$(nproc) . -DBUILD_ELASTICLIENT_TESTS=NO -DBUILD_ELASTICLIENT_EXAMPLE=NO \
+    && make -j$(nproc) \
+    && make -j$(nproc) install \
+    && cp -r "external/cpr/include/cpr" "/usr/local/include/cpr" \
+    && cp "lib/libcpr.so" "/usr/local/lib/libcpr.so" \
+    && cd .. && rm -rf elasticlient
+
 RUN git clone --depth 1 -b releases/v3.3 https://github.com/mongodb/mongo-cxx-driver \
     && cd mongo-cxx-driver/build \
     && cmake -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local .. \
