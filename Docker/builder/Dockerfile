@@ -56,6 +56,16 @@ RUN wget https://github.com/WebAssembly/binaryen/archive/1.37.21.tar.gz -O - | t
     && cmake --build build --target install \
     && cd .. && rm -rf binaryen-1.37.21
 
+RUN git clone https://github.com/WLBF/elasticlient.git \
+    && cd elasticlient \
+    && git submodule update --init --recursive \
+    && cmake -j$(nproc) . -DBUILD_ELASTICLIENT_TESTS=NO -DBUILD_ELASTICLIENT_EXAMPLE=NO \
+    && make -j$(nproc) \
+    && make -j$(nproc) install \
+    && cp -r "external/cpr/include/cpr" "/usr/local/include/cpr" \
+    && cp "lib/libcpr.so" "/usr/local/lib/libcpr.so" \
+    && cd .. && rm -rf elasticlient
+
 RUN git clone --depth 1 https://github.com/cryptonomex/secp256k1-zkp \
     && cd secp256k1-zkp \
     && ./autogen.sh \
