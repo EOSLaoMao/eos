@@ -370,7 +370,7 @@ optional<abi_serializer> elasticsearch_plugin_impl::get_abi_serializer( account_
             abi_serializer abis;
             if( n == chain::config::system_account_name ) {
                // redefine eosio setabi.abi from bytes to abi_def
-               // Done so that abi is stored as abi_def in mongo instead of as bytes
+               // Done so that abi is stored as abi_def in elasticsearch instead of as bytes
                auto itr = std::find_if( abi.structs.begin(), abi.structs.end(),
                                           []( const auto& s ) { return s.name == "setabi"; } );
                if( itr != abi.structs.end() ) {
@@ -383,13 +383,13 @@ optional<abi_serializer> elasticsearch_plugin_impl::get_abi_serializer( account_
                         abis.add_specialized_unpack_pack( "abi_def",
                               std::make_pair<abi_serializer::unpack_function, abi_serializer::pack_function>(
                                     []( fc::datastream<const char*>& stream, bool is_array, bool is_optional ) -> fc::variant {
-                                       EOS_ASSERT( !is_array && !is_optional, chain::mongo_db_exception, "unexpected abi_def");
+                                       EOS_ASSERT( !is_array && !is_optional, chain::elasticsearch_exception, "unexpected abi_def");
                                        chain::bytes temp;
                                        fc::raw::unpack( stream, temp );
                                        return fc::variant( fc::raw::unpack<abi_def>( temp ) );
                                     },
                                     []( const fc::variant& var, fc::datastream<char*>& ds, bool is_array, bool is_optional ) {
-                                       EOS_ASSERT( false, chain::mongo_db_exception, "never called" );
+                                       EOS_ASSERT( false, chain::elasticsearch_exception, "never called" );
                                     }
                               ) );
                      }
