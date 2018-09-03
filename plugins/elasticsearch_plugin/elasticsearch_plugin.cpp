@@ -1104,6 +1104,10 @@ void elasticsearch_plugin::set_program_options(options_description&, options_des
          "If specified then only abi data pushed to elasticsearch until specified block is reached.")
          ("elastic-url,u", bpo::value<std::string>(),
          "elasticsearch URL connection string If not specified then plugin is disabled.")
+         ("elastic-user", bpo::value<std::string>(),
+         "elasticsearch user.")
+         ("elastic-password", bpo::value<std::string>(),
+         "elasticsearch password.")
          ("elastic-index-name", bpo::value<std::string>()->default_value("eos"),
          "Index name of elasticsearch index for data store.")
          ("elastic-store-blocks", bpo::value<bool>()->default_value(true),
@@ -1210,7 +1214,9 @@ void elasticsearch_plugin::plugin_initialize(const variables_map& options) {
          }
 
          std::string url_str = options.at( "elastic-url" ).as<std::string>();
-         my->elastic_client = std::make_shared<elasticsearch_client>(std::vector<std::string>({url_str}), my->index_name);
+         std::string user_str = options.at( "elastic-user" ).as<std::string>();
+         std::string password_str = options.at( "elastic-password" ).as<std::string>();
+         my->elastic_client = std::make_shared<elasticsearch_client>(std::vector<std::string>({url_str}), my->index_name, user_str, password_str);
 
          // hook up to signals on controller
          chain_plugin* chain_plug = app().find_plugin<chain_plugin>();
