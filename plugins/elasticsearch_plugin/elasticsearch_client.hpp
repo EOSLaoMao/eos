@@ -10,8 +10,8 @@ namespace eosio {
 class elasticsearch_client
 {
 public:
-   elasticsearch_client(const std::vector<std::string> url_list, const std::string &index_name)
-      :index_name(index_name), client(url_list), bulk_indexer(url_list, 6000){};
+   elasticsearch_client(const std::vector<std::string> url_list, const std::string &index_name, const std::string &user, const std::string &password)
+      :index_name(index_name), client(url_list, user, password), bulk_indexer(url_list, user, password){};
 
    void delete_index();
    void init_index(const std::string &mappings);
