@@ -520,12 +520,13 @@ void elasticsearch_plugin_impl::add_pub_keys( const vector<chain::key_weight>& k
 
    for( const auto& pub_key_weight : keys ) {
       fc::mutable_variant_object doc;
+      doc["type"] = pub_keys_type;
       doc["account"] = name.to_string();
       doc["public_key"] = pub_key_weight.key.operator string();
       doc["permission"] = permission.to_string();
       doc["createAt"] = now.count();
       auto json = fc::json::to_string( doc );
-      bulk_pub_keys.indexDocument(pub_keys_type, "", json);
+      bulk_pub_keys.indexDocument("_doc", "", json);
    }
 
    try {
@@ -552,14 +553,19 @@ void elasticsearch_plugin_impl::remove_pub_keys( const account_name& name, const
             "permission": "%2%"
           }
         }
-      ]
+      ],
+      "filter": {
+        "match": {
+          "type": "pub_keys"
+        }
+      }
     }
   }
 }
 )";
    try {
       auto query = boost::str(boost::format(query_pattern) % name.to_string() % permission.to_string());
-      elastic_client->delete_by_query(pub_keys_type, query);
+      elastic_client->delete_by_query(query);
    } catch (...) {
       handle_elasticsearch_exception( "pub_keys delete", __LINE__ );
    }
@@ -575,12 +581,13 @@ void elasticsearch_plugin_impl::add_account_control( const vector<chain::permiss
 
    for( const auto& controlling_account : controlling_accounts ) {
       fc::mutable_variant_object doc;
+      doc["type"] = account_controls_type;
       doc["controlled_account"] = name.to_string();
       doc["controlled_permission"] = permission.to_string();
       doc["controlling_account"] = controlling_account.permission.actor.to_string();
       doc["createAt"] = now.count();
       auto json = fc::json::to_string( doc );
-      bulk_account_controls.indexDocument( account_controls_type, "", json );
+      bulk_account_controls.indexDocument( "_doc", "", json );
    }
 
    try {
@@ -607,14 +614,19 @@ void elasticsearch_plugin_impl::remove_account_control( const account_name& name
             "controlled_permission": "%2%"
           }
         }
-      ]
+      ],
+      "filter": {
+        "match": {
+          "type": "account_controls"
+        }
+      }
     }
   }
 }
 )";
    try {
       auto query = boost::str(boost::format(query_pattern) % name.to_string() % permission.to_string());
-      elastic_client->delete_by_query(account_controls_type, query);
+      elastic_client->delete_by_query( query );
    } catch (...) {
       handle_elasticsearch_exception( "account_controls delete", __LINE__ );
    }
@@ -623,13 +635,14 @@ void elasticsearch_plugin_impl::remove_account_control( const account_name& name
 void elasticsearch_plugin_impl::create_account( const name& name, std::chrono::milliseconds& now )
 {
    fc::mutable_variant_object account_doc;
+   account_doc["type"] = accounts_type;
    account_doc["name"] = name.to_string();
    account_doc["createAt"] = now.count();
 
    auto json = fc::json::to_string( account_doc );
 
    try {
-      elastic_client->index(accounts_type, json);
+      elastic_client->index( json );
    } catch( ... ) {
       handle_elasticsearch_exception( "create_account" + json, __LINE__ );
    }
@@ -639,8 +652,26 @@ bool elasticsearch_plugin_impl::find_account( fc::variant& v, const account_name
 {
    auto account_name = name.to_string();
    fc::variant res;
-   std::string query = boost::str(boost::format(R"({"query" : { "term" : { "name" : "%1%" }}})") % account_name);
-   elastic_client->search(res, accounts_type, query);
+   auto query_pattern = R"(
+{
+  "query": {
+    "bool": {
+      "must": {
+        "match": {
+          "name": "%1%"
+        }
+      },
+      "filter": {
+        "match": {
+          "type": "accounts"
+        }
+      }
+    }
+  }
+}
+)";
+   std::string query = boost::str(boost::format(query_pattern) % account_name);
+   elastic_client->search(res, query);
 
    if(res["hits"]["total"] != 1) return false;
 
@@ -653,8 +684,26 @@ bool elasticsearch_plugin_impl::find_account( fc::variant& v, const account_name
 bool elasticsearch_plugin_impl::find_block( fc::variant& v, const std::string& id )
 {
    fc::variant res;
-   std::string query = boost::str(boost::format(R"({"query" : { "term" : { "block_id" : "%1%" }}})") % id);
-   elastic_client->search(res, blocks_type, query);
+   auto query_pattern = R"(
+{
+  "query": {
+    "bool": {
+      "must": {
+        "match": {
+          "block_id": "%1%"
+        }
+      },
+      "filter": {
+        "match": {
+          "type": "blocks"
+        }
+      }
+    }
+  }
+}
+)";
+   std::string query = boost::str(boost::format(query_pattern) % id);
+   elastic_client->search(res, query);
 
    if(res["hits"]["total"] != 1) return false;
 
@@ -710,7 +759,7 @@ void elasticsearch_plugin_impl::update_account(const chain::action& act)
             create_account( setabi.account, now );
          }
 
-         if( find_account( account, setabi.account) ) {
+         if( find_account( account, setabi.account ) ) {
             fc::mutable_variant_object doc;
             abi_def abi_def = fc::raw::unpack<chain::abi_def>( setabi.abi );
 
@@ -719,7 +768,7 @@ void elasticsearch_plugin_impl::update_account(const chain::action& act)
 
             auto json = fc::json::to_string( doc );
             try {
-               elastic_client->update(accounts_type, account["_id"].as_string(), json);
+               elastic_client->update(account["_id"].as_string(), json);
             } catch( ... ) {
                handle_elasticsearch_exception( "update account", __LINE__ );
             }
@@ -742,11 +791,12 @@ bool elasticsearch_plugin_impl::add_action_trace( elasticlient::SameIndexBulkDat
       fc::mutable_variant_object action_traces_doc;
       const chain::base_action_trace& base = atrace; // without inline action traces
 
+      action_traces_doc["type"] = action_traces_type;
       fc::from_variant( to_variant_with_abi( base ), action_traces_doc );
       action_traces_doc["createdAt"] = now.count();
 
       auto json = fc::json::to_string(action_traces_doc);
-      bulk_action_traces.indexDocument(action_traces_type, "", json);
+      bulk_action_traces.indexDocument("_doc", "", json);
       added = true;
    }
 
@@ -770,6 +820,7 @@ void elasticsearch_plugin_impl::_process_accepted_block( const chain::block_stat
          std::chrono::microseconds{fc::time_point::now().time_since_epoch().count()});
 
    fc::mutable_variant_object block_state_doc;
+   block_state_doc["type"] = block_states_type;
    block_state_doc["block_num"] = static_cast<int32_t>(block_num);
    block_state_doc["block_id"] = block_id_str;
    block_state_doc["validated"] = bs->validated;
@@ -780,7 +831,7 @@ void elasticsearch_plugin_impl::_process_accepted_block( const chain::block_stat
    auto block_states_json = fc::json::to_string( block_state_doc );
 
    try {
-      elastic_client->index(block_states_type, block_states_json);
+      elastic_client->index( block_states_json );
    } catch( ... ) {
       handle_elasticsearch_exception( "block_states index:" + block_states_json, __LINE__ );
    }
@@ -789,6 +840,7 @@ void elasticsearch_plugin_impl::_process_accepted_block( const chain::block_stat
 
    fc::mutable_variant_object block_doc;
 
+   block_doc["type"] = blocks_type;
    block_doc["block_num"] = static_cast<int32_t>(block_num);
    block_doc["block_id"] = block_id_str;
    block_doc["irreversible"] = false;
@@ -799,7 +851,7 @@ void elasticsearch_plugin_impl::_process_accepted_block( const chain::block_stat
    auto block_json = fc::json::to_string( block_doc );
 
    try {
-      elastic_client->index(blocks_type, block_json);
+      elastic_client->index( block_json );
    } catch( ... ) {
       handle_elasticsearch_exception( "blocks index:" + block_json, __LINE__ );
    }
@@ -830,7 +882,7 @@ void elasticsearch_plugin_impl::_process_irreversible_block(const chain::block_s
       auto json = fc::json::to_string(doc);
 
       try {
-         elastic_client->update(blocks_type, ir_block["_id"].as_string(), json);
+         elastic_client->update( ir_block["_id"].as_string(), json );
       } catch( ... ) {
          handle_elasticsearch_exception( "update block", __LINE__ );
       }
@@ -864,7 +916,7 @@ void elasticsearch_plugin_impl::_process_irreversible_block(const chain::block_s
       auto doc_json = fc::json::to_string(doc);
       auto query = boost::str(boost::format(R"({ "doc": %1%})") % doc_json);
 
-      bulk_trans.createDocument(trans_type, trx_id_str, query);
+      bulk_trans.updateDocument("_doc", trx_id_str, query);
       transactions_in_block = true;
    }
 
@@ -905,11 +957,12 @@ void elasticsearch_plugin_impl::_process_accepted_transaction( const chain::tran
    trans_doc["implicit"] = t->implicit;
    trans_doc["scheduled"] = t->scheduled;
    trans_doc["createdAt"] = now.count();
+   trans_doc["type"] = trans_type;
 
    auto trans_json = fc::json::to_string( trans_doc );
 
    try {
-      elastic_client->index(trans_type, trans_json, trx_id_str);
+      elastic_client->index(trans_json, trx_id_str);
    } catch( ... ) {
       handle_elasticsearch_exception( "trans index:" + trans_json, __LINE__ );
    }
@@ -947,10 +1000,11 @@ void elasticsearch_plugin_impl::_process_applied_transaction( const chain::trans
    // transaction trace index
    fc::from_variant( to_variant_with_abi( *t ), trans_traces_doc );
    trans_traces_doc["createAt"] = now.count();
+   trans_traces_doc["type"] = trans_traces_type;
 
    std::string json = fc::json::to_string( trans_traces_doc );
    try {
-      elastic_client->index(trans_traces_type, json);
+      elastic_client->index(json);
    } catch( ... ) {
       handle_elasticsearch_exception( "trans_traces index: " + json, __LINE__ );
    }
@@ -1076,7 +1130,7 @@ void elasticsearch_plugin_impl::init() {
    ilog("create elasticsearch index");
    elastic_client->init_index( elastic_mappings );
 
-   if (elastic_client->count_doc(accounts_type) == 0) {
+   if (elastic_client->count_doc(R"({ "query" : { "term" : { "type" : "accounts" }}})") == 0) {
       auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::microseconds{fc::time_point::now().time_since_epoch().count()});
       create_account(name( chain::config::system_account_name ), now);

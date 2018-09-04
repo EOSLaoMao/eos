@@ -15,12 +15,12 @@ public:
 
    void delete_index();
    void init_index(const std::string &mappings);
-   void index(const std::string &type, const std::string &body, const std::string &id = "");
-   uint64_t count_doc(const std::string &type, const std::string &query = std::string());
-   void search(fc::variant& v, const std::string &type, const std::string &query);
-   void delete_by_query(const std::string &type, const std::string &query);
+   void index(const std::string &body, const std::string &id = "");
+   uint64_t count_doc(const std::string &query = std::string());
+   void search(fc::variant& v, const std::string &query);
+   void delete_by_query(const std::string &query);
    void bulk_perform(elasticlient::SameIndexBulkData &bulk);
-   void update(const std::string &type, const std::string &id, const std::string &doc);
+   void update(const std::string &id, const std::string &doc);
 
    std::string index_name;
    elasticlient::Client client;
