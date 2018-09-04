@@ -1264,7 +1264,7 @@ void elasticsearch_plugin::plugin_initialize(const variables_map& options) {
          }
 
          if( my->start_block_num == 0 ) {
-         my->start_block_reached = true;
+            my->start_block_reached = true;
          }
 
          std::string url_str = options.at( "elastic-url" ).as<std::string>();

@@ -19,6 +19,18 @@ bool is_2xx(int32_t status_code)
 }
 } // namespace
 
+bool elasticsearch_client::index_exists()
+{
+   cpr::Response resp = client.performRequest(elasticlient::Client::HTTPMethod::HEAD, index_name, "");
+   if ( is_2xx(resp.status_code) ) {
+      return true;
+   } else if ( resp.status_code == 404 ) {
+      return false;
+   } else {
+      EOS_THROW(chain::response_code_exception, "${code} ${text}", ("code", resp.status_code)("text", resp.text));
+   }
+}
+
 void elasticsearch_client::index(const std::string &body, const std::string &id)
 {
    cpr::Response resp = client.index(index_name, "_doc", id, body);
@@ -27,8 +39,10 @@ void elasticsearch_client::index(const std::string &body, const std::string &id)
 
 void elasticsearch_client::init_index(const std::string &mappings)
 {
-   cpr::Response resp = client.performRequest(elasticlient::Client::HTTPMethod::PUT, index_name, mappings);
-   EOS_ASSERT(is_2xx(resp.status_code), chain::response_code_exception, "${code} ${text}", ("code", resp.status_code)("text", resp.text));
+   if ( !index_exists() ) {
+      cpr::Response resp = client.performRequest(elasticlient::Client::HTTPMethod::PUT, index_name, mappings);
+      EOS_ASSERT(is_2xx(resp.status_code), chain::response_code_exception, "${code} ${text}", ("code", resp.status_code)("text", resp.text));
+   }
 }
 
 void elasticsearch_client::delete_index()

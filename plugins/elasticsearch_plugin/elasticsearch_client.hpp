@@ -14,6 +14,7 @@ public:
       :index_name(index_name), client(url_list, user, password), bulk_indexer(url_list, user, password){};
 
    void delete_index();
+   bool index_exists();
    void init_index(const std::string &mappings);
    void index(const std::string &body, const std::string &id = "");
    uint64_t count_doc(const std::string &query = std::string());
