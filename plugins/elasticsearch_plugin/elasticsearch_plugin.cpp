@@ -864,7 +864,7 @@ void elasticsearch_plugin_impl::_process_irreversible_block(const chain::block_s
       auto doc_json = fc::json::to_string(doc);
       auto query = boost::str(boost::format(R"({ "doc": %1%})") % doc_json);
 
-      bulk_trans.createDocument(trans_type, trx_id_str, query);
+      bulk_trans.updateDocument(trans_type, trx_id_str, query);
       transactions_in_block = true;
    }
 
