@@ -1,4 +1,3 @@
-#include "elasticsearch_client.hpp"
 #include <cpr/response.h>
 
 #include <fc/io/json.hpp>
@@ -7,6 +6,9 @@
 #include <boost/format.hpp>
 
 #include <eosio/chain/exceptions.hpp>
+
+#include "elasticsearch_client.hpp"
+#include "exceptions.hpp"
 
 namespace eosio
 {

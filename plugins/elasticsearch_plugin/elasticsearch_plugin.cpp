@@ -27,6 +27,7 @@
 
 
 #include "elasticsearch_client.hpp"
+#include "exceptions.hpp"
 #include "mappings.hpp"
 
 
@@ -1158,9 +1159,9 @@ void elasticsearch_plugin::set_program_options(options_description&, options_des
          "If specified then only abi data pushed to elasticsearch until specified block is reached.")
          ("elastic-url,u", bpo::value<std::string>(),
          "elasticsearch URL connection string If not specified then plugin is disabled.")
-         ("elastic-user", bpo::value<std::string>(),
+         ("elastic-user", bpo::value<std::string>()->default_value(""),
          "elasticsearch user.")
-         ("elastic-password", bpo::value<std::string>(),
+         ("elastic-password", bpo::value<std::string>()->default_value(""),
          "elasticsearch password.")
          ("elastic-index-name", bpo::value<std::string>()->default_value("eos"),
          "Index name of elasticsearch index for data store.")
