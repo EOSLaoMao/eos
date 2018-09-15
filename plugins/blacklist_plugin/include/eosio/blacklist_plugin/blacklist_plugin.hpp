@@ -20,6 +20,7 @@ using namespace appbase;
 
 struct blacklist_stats {
    std::string                 local_hash;
+   std::string                 onchain_hash;
 };
 
 class blacklist_plugin : public appbase::plugin<blacklist_plugin> {

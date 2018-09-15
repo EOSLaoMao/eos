@@ -75,8 +75,7 @@ namespace eosio {
             return actors;
          }
 
-         //std::vector<std::string> get_onchain_actor_blacklist()
-         void get_onchain_actor_blacklist()
+         std::vector<std::string> get_onchain_actor_blacklist()
          {
             auto ro_api = app().get_plugin<chain_plugin>().get_read_only_api();
             eosio::chain_apis::read_only::get_table_rows_params p;
@@ -86,14 +85,25 @@ namespace eosio {
             p.table = eosio::chain::string_to_name("theblacklist");
             p.limit = 100; // TODO, will became a BUG if rows are more than 100
             p.json = true;
+            std::vector<std::string> actors;
+            std::vector<std::string> chunk;
 
             auto rows = ro_api.get_table_rows(p).rows;
             //rows is a vector<fc::variant> type
             ilog("table rows: ${rows}\n", ("rows", rows));
             for ( auto &row : rows ) {
-              ilog("table row: ${row}\n", ("row", row));
-              ilog("table row accounts: ${accounts}\n", ("accounts", row["accounts"]));
+              if (row["type"] == "actor-blacklist") {
+                 ilog("table row: ${row}\n", ("row", row));
+                 ilog("table row accounts: ${accounts}\n", ("accounts", row["accounts"]));
+                 chunk = apply(actors,[](std::string element){
+                    std::ostringstream stringStream;
+                    stringStream << "actor-blacklist=" << element << "\n";
+                    return stringStream.str();
+                 });
+                 actors.insert(actors.end(), chunk.begin(), chunk.end());
+              }
             }
+            return actors;
          }
 
 
@@ -104,10 +114,12 @@ namespace eosio {
    blacklist_plugin::~blacklist_plugin(){}
 
    blacklist_stats blacklist_plugin::check_hash() {
-      my->get_onchain_actor_blacklist();
-      auto actors = my->get_local_actor_blacklist();
+      auto onchain_actors = my->get_onchain_actor_blacklist();
+      auto local_actors = my->get_local_actor_blacklist();
+
       blacklist_stats ret;
-      ret.local_hash = my->generate_hash(actors);
+      ret.local_hash = my->generate_hash(local_actors);
+      ret.onchain_hash = my->generate_hash(onchain_actors);
       return ret;
    }
 
@@ -184,7 +196,7 @@ namespace eosio {
    }
 
    void blacklist_plugin::plugin_startup() {
-     ilog("producer blacklist plugin:  plugin_startup() begin");
+     ilog("starting blacklist_plugin");
       app().get_plugin<http_plugin>().add_api({
           CALL(blacklist, this, check_hash,
                INVOKE_R_V(this, check_hash), 200),
