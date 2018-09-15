@@ -16,7 +16,7 @@ class producer_blacklist_plugin_impl {
       std::string actor_blacklist_hash = "";
 
       void check_blacklist() {
-         ilog("blacklist checking");
+         ilog("blacklist hash: ${hash}", ("hash", actor_blacklist_hash));
       }
 };
 
