@@ -80,9 +80,10 @@ namespace eosio {
          {
             auto ro_api = app().get_plugin<chain_plugin>().get_read_only_api();
             eosio::chain_apis::read_only::get_table_rows_params p;
-            p.code = N(theblacklist);
-            p.scope = N(theblacklist);
-            p.table = N(theblacklist);
+            
+            p.code = eosio::chain::string_to_name("theblacklist");
+            p.scope = "theblacklist";
+            p.table = eosio::chain::string_to_name("theblacklist");
             p.limit = 100;
             p.json = true;
             auto rows = ro_api.get_table_rows(p);
