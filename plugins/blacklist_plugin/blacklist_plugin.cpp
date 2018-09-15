@@ -35,6 +35,17 @@ void producer_blacklist_plugin::set_program_options(options_description&, option
          ;
 }
 
+template <class Container, class Function>
+auto apply (const Container &cont, Function fun) {
+    std::vector< typename
+            std::result_of<Function(const typename Container::value_type&)>::type> ret;
+    ret.reserve(cont.size());
+    for (const auto &v : cont) {
+       ret.push_back(fun(v));
+    }
+    return ret;
+}
+
 void producer_blacklist_plugin::plugin_initialize(const variables_map& options) {
    try {
 
