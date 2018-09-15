@@ -92,7 +92,7 @@ namespace eosio {
             ilog("table rows: ${rows}\n", ("rows", rows));
             for ( auto &row : rows ) {
               ilog("table row: ${row}\n", ("row", row));
-              ilog("table row accounts: ${accounts}\n", ("row", row.find("accounts")));
+              ilog("table row accounts: ${accounts}\n", ("accounts", row["accounts"]));
             }
          }
 
