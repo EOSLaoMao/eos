@@ -47,7 +47,7 @@ namespace eosio {
 
    blacklist_stats blacklist_plugin::get() {
       blacklist_stats ret;
-      ret.local_hash = actor_blacklist_hash;
+      ret.local_hash = my->actor_blacklist_hash;
       return ret;
    }
 
