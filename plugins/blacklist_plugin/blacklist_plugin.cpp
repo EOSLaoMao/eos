@@ -87,11 +87,10 @@ namespace eosio {
             p.limit = 100; // TODO, will became a BUG if rows are more than 100
             p.json = true;
 
-            auto rows = ro_api.get_table_rows(p)["rows"];
+            auto rows = ro_api.get_table_rows(p).rows;
             //rows is a vector<fc::variant> type
             ilog("table rows: ${rows}\n", ("rows", rows));
             for ( auto &row : rows ) {
-              std::cout << *i << std::endl;
               ilog("table row: ${row}\n", ("row", row));
               ilog("table row accounts: ${accounts}\n", ("row", row.accounts));
             }
