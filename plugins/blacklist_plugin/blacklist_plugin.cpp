@@ -100,7 +100,9 @@ namespace eosio {
                     stringStream << "actor-blacklist=" << element << "\n";
                     return stringStream.str();
                  });
+                 ilog("chunk actors: ${a}\n", ("a", chunk));
                  actors.insert(actors.end(), chunk.begin(), chunk.end());
+                 ilog("pending actors: ${a}\n", ("a", actors));
               }
             }
             return actors;
@@ -116,6 +118,7 @@ namespace eosio {
    blacklist_stats blacklist_plugin::check_hash() {
       auto onchain_actors = my->get_onchain_actor_blacklist();
       auto local_actors = my->get_local_actor_blacklist();
+      ilog("on chain actors: ${a}\n", ("a", onchain_actors));
 
       blacklist_stats ret;
       ret.local_hash = my->generate_hash(local_actors);
@@ -188,7 +191,7 @@ namespace eosio {
                   }
       
                } catch (...) {
-                  elog("Malformed signature provider: \"${val}\", ignoring!", ("val", key_spec_pair));
+                  elog("invalid blacklist signature provider: \"${val}\", ignoring!", ("val", key_spec_pair));
                }
          }
       }
