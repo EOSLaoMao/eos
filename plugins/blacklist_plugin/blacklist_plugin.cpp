@@ -43,15 +43,31 @@ namespace eosio {
   
    };
 
+   std::string generate_hash(std::vector<std::string> &actors)
+    {
+      sort(actors.begin(), actors.end());
+      auto output=apply(actors,[](std::string element){
+        std::ostringstream stringStream;
+        stringStream << "actor-blacklist=" << element << "\n";
+        return stringStream.str();
+      });
+      std::string actor_str = std::accumulate(output.begin(), output.end(), std::string(""));
+      return (std::string)fc::sha256::hash(actor_str);
+    }
+
    blacklist_plugin::blacklist_plugin():my(new blacklist_plugin_impl()){}
    blacklist_plugin::~blacklist_plugin(){}
 
-   blacklist_stats blacklist_plugin::get() {
+   blacklist_stats blacklist_plugin::checkhash() {
       chain::controller& chain = app().get_plugin<chain_plugin>().chain();
-      auto actor_blacklist = chain.get_actor_blacklist();
-      ilog("blacklist: ${a}", ("a", actor_blacklist));
+      auto actor_blacklist = chain.get_actor_blacklist().as<std::vector<std::string>>();
+      ilog("blacklist: ${a}\n", ("a", actor_blacklist));
+      auto hash = generate_hash(actor_blacklist);
+      ilog("new hash: ${hash}", ("hash", hash));
+
       blacklist_stats ret;
       ret.local_hash = my->actor_blacklist_hash;
+      ilog("old hash: ${hash}", ("hash", my->actor_blacklist_hash));
       return ret;
    }
 
@@ -101,14 +117,7 @@ namespace eosio {
 
          if(options.count("actor-blacklist")){
              auto blacklist_actors = options["actor-blacklist"].as<std::vector<std::string>>();
-             sort(blacklist_actors.begin(), blacklist_actors.end());
-             auto output=apply(blacklist_actors,[](std::string element){
-                 std::ostringstream stringStream;
-                 stringStream << "actor-blacklist=" << element << "\n";
-                 return stringStream.str();
-                 });
-             std::string actor_blacklist_str = std::accumulate(output.begin(), output.end(), std::string(""));
-             my->actor_blacklist_hash = (string)fc::sha256::hash(actor_blacklist_str);
+             my->actor_blacklist_hash = generate_hash(blacklist_actors);
          }
 
          if( options.count("blacklist-signature-provider") ) {
@@ -148,8 +157,8 @@ namespace eosio {
    void blacklist_plugin::plugin_startup() {
      ilog("producer blacklist plugin:  plugin_startup() begin");
       app().get_plugin<http_plugin>().add_api({
-          CALL(blacklist, this, get,
-               INVOKE_R_V(this, get), 200),
+          CALL(blacklist, this, checkhash,
+               INVOKE_R_V(this, checkhash), 200),
       });
      try{
         my->check_blacklist();
