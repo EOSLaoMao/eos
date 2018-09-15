@@ -4,6 +4,7 @@
  */
 #include <fc/variant.hpp>
 #include <fc/io/json.hpp>
+#include <eosio/chain/controller.hpp>
 #include <eosio/blacklist_plugin/blacklist_plugin.hpp>
 
 namespace eosio {
@@ -46,6 +47,9 @@ namespace eosio {
    blacklist_plugin::~blacklist_plugin(){}
 
    blacklist_stats blacklist_plugin::get() {
+      chain::controller& chain = app().get_plugin<chain_plugin>().chain();
+      auto actor_blacklist = chain.get_actor_whitelist();
+      ilog("blacklist: ${a}", ("a", actor_blacklist));
       blacklist_stats ret;
       ret.local_hash = my->actor_blacklist_hash;
       return ret;
@@ -144,7 +148,7 @@ namespace eosio {
    void blacklist_plugin::plugin_startup() {
      ilog("producer blacklist plugin:  plugin_startup() begin");
       app().get_plugin<http_plugin>().add_api({
-          CALL(db_size, this, get,
+          CALL(blacklist, this, get,
                INVOKE_R_V(this, get), 200),
       });
      try{
