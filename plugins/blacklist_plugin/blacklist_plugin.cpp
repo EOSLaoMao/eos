@@ -62,6 +62,18 @@ namespace eosio {
             std::string actor_str = std::accumulate(output.begin(), output.end(), std::string(""));
             return (std::string)fc::sha256::hash(actor_str);
           }
+
+         std::vector<std::string> void get_actor_blacklist()
+         {
+            chain::controller& chain = app().get_plugin<chain_plugin>().chain();
+            auto actor_blacklist = chain.get_actor_blacklist();
+            auto actors=apply(actor_blacklist,[](account_name element){
+              std::ostringstream stringStream;
+              stringStream << element.to_string();
+              return stringStream.str();
+            });
+            return actors;
+         }
   
    };
 
@@ -69,27 +81,9 @@ namespace eosio {
    blacklist_plugin::~blacklist_plugin(){}
 
    blacklist_stats blacklist_plugin::check_hash() {
-      chain::controller& chain = app().get_plugin<chain_plugin>().chain();
-      auto actor_blacklist = chain.get_actor_blacklist();
-      ilog("blacklist: ${a}\n", ("a", actor_blacklist));
-      //auto hash = my->generate_hash(actor_blacklist);
-      //ilog("new hash: ${hash}", ("hash", hash));
-
-      auto actors=apply(actor_blacklist,[](account_name element){
-        std::ostringstream stringStream;
-        stringStream << element.to_string();
-        return stringStream.str();
-      });
-      std::string actor_str = std::accumulate(actors.begin(), actors.end(), std::string(""));
-      ilog("output: ${output}\n", ("output", actors));
-      ilog("actor_str: ${s}\n", ("s", actor_str));
-
-      auto hash = my->generate_hash(actors);
-      ilog("new hash: ${hash}", ("hash", hash));
-
+      auto actors = my->get_actor_blacklist();
       blacklist_stats ret;
-      ret.local_hash = my->actor_blacklist_hash;
-      ilog("old hash: ${hash}", ("hash", my->actor_blacklist_hash));
+      ret.local_hash = my->generate_hash(actors);
       return ret;
    }
 
