@@ -4,6 +4,8 @@
  */
 #pragma once
 #include <appbase/application.hpp>
+#include <eosio/chain_plugin/chain_plugin.hpp>
+#include <eosio/producer_plugin/producer_plugin.hpp>
 
 namespace eosio {
 

@@ -3,34 +3,15 @@
  *  @copyright defined in eos/LICENSE.txt
  */
 #include <eosio/blacklist_plugin/blacklist_plugin.hpp>
-#include <boost/asio/steady_timer.hpp>
 
 namespace eosio {
    static appbase::abstract_plugin& _template_plugin = app().register_plugin<producer_blacklist_plugin>();
 
 class producer_blacklist_plugin_impl {
    public:
-      unique_ptr<boost::asio::steady_timer> timer;
-      boost::asio::steady_timer::duration timer_period;
 
       void check_blacklist() {
          ilog("blacklist checking");
-      }
-
-      void start_timer( ) {
-        timer->expires_from_now(timer_period);
-        timer->async_wait( [this](boost::system::error_code ec) {
-          start_timer();
-          if(!ec) {
-            try{
-              check_blacklist();
-            }
-            FC_LOG_AND_DROP();
-          }
-          else {
-            elog( "Error from blacklist timer: ${m}",( "m", ec.message()));
-          }
-        });
       }
 };
 
@@ -38,18 +19,19 @@ producer_blacklist_plugin::producer_blacklist_plugin():my(new producer_blacklist
 producer_blacklist_plugin::~producer_blacklist_plugin(){}
 
 void producer_blacklist_plugin::set_program_options(options_description&, options_description& cfg) {
+
    cfg.add_options()
-         ("option-name", bpo::value<string>()->default_value("default value"),
-          "Option Description")
+         ("blacklist-signature-provider", bpo::value<string>()->default_value("HEARTBEAT_PUB_KEY=KEY:HEARTBEAT_PRIVATE_KEY"),
+          "Blacklist key provider")
+         ("blacklist-contract", bpo::value<string>()->default_value("theblacklist"),
+          "Blacklist Contract")
+         ("blacklist-permission", bpo::value<string>()->default_value("blacklist"),
+          "Blacklist permission name")    
          ;
 }
 
 void producer_blacklist_plugin::plugin_initialize(const variables_map& options) {
    try {
-      if( options.count( "blacklist-check-interval" )) {
-          my->interval = options.at( "blacklist-check-interval" ).as<int>();
-          my->timer_period = std::chrono::seconds( my->interval );
-      }
 
       if(options.count("producer-name")){
           const std::vector<std::string>& ops = options["producer-name"].as<std::vector<std::string>>();
@@ -108,7 +90,6 @@ void producer_blacklist_plugin::plugin_startup() {
      my->check_blacklist();
   }
   FC_LOG_AND_DROP();
-  my->start_timer();
 }
 
 void producer_blacklist_plugin::plugin_shutdown() {
