@@ -14,6 +14,11 @@ using namespace appbase;
 /**
  *  This is a template plugin, intended to serve as a starting point for making new plugins
  */
+
+struct blacklist_stats {
+   std::string                 local_hash;
+};
+
 class blacklist_plugin : public appbase::plugin<blacklist_plugin> {
 public:
    blacklist_plugin();
