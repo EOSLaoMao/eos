@@ -5,9 +5,9 @@
 #include <eosio/blacklist_plugin/blacklist_plugin.hpp>
 
 namespace eosio {
-   static appbase::abstract_plugin& _template_plugin = app().register_plugin<producer_blacklist_plugin>();
+   static appbase::abstract_plugin& _template_plugin = app().register_plugin<blacklist_plugin>();
 
-class producer_blacklist_plugin_impl {
+class blacklist_plugin_impl {
    public:
 
       account_name producer_name;
@@ -20,10 +20,10 @@ class producer_blacklist_plugin_impl {
       }
 };
 
-producer_blacklist_plugin::producer_blacklist_plugin():my(new producer_blacklist_plugin_impl()){}
-producer_blacklist_plugin::~producer_blacklist_plugin(){}
+blacklist_plugin::blacklist_plugin():my(new blacklist_plugin_impl()){}
+blacklist_plugin::~blacklist_plugin(){}
 
-void producer_blacklist_plugin::set_program_options(options_description&, options_description& cfg) {
+void blacklist_plugin::set_program_options(options_description&, options_description& cfg) {
 
    cfg.add_options()
          ("blacklist-signature-provider", bpo::value<string>()->default_value("HEARTBEAT_PUB_KEY=KEY:HEARTBEAT_PRIVATE_KEY"),
@@ -46,7 +46,7 @@ auto apply (const Container &cont, Function fun) {
     return ret;
 }
 
-void producer_blacklist_plugin::plugin_initialize(const variables_map& options) {
+void blacklist_plugin::plugin_initialize(const variables_map& options) {
    try {
 
       if(options.count("producer-name")){
@@ -100,7 +100,7 @@ void producer_blacklist_plugin::plugin_initialize(const variables_map& options) 
    FC_LOG_AND_RETHROW()
 }
 
-void producer_blacklist_plugin::plugin_startup() {
+void blacklist_plugin::plugin_startup() {
   ilog("producer blacklist plugin:  plugin_startup() begin");
   try{
      my->check_blacklist();
@@ -108,7 +108,7 @@ void producer_blacklist_plugin::plugin_startup() {
   FC_LOG_AND_DROP();
 }
 
-void producer_blacklist_plugin::plugin_shutdown() {
+void blacklist_plugin::plugin_shutdown() {
    // OK, that's enough magic
 }
 
