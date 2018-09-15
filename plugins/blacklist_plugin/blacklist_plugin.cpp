@@ -51,8 +51,7 @@ namespace eosio {
             ilog("blacklist hash: ${hash}", ("hash", actor_blacklist_hash));
          }
 
-         //std::string generate_hash(std::vector<std::string> &actors)
-         std::string generate_hash(const flat_set<account_name>& actors)
+         std::string generate_hash(std::vector<std::string> &actors)
           {
             sort(actors.begin(), actors.end());
             auto output=apply(actors,[](std::string element){
@@ -73,8 +72,8 @@ namespace eosio {
       chain::controller& chain = app().get_plugin<chain_plugin>().chain();
       auto actor_blacklist = chain.get_actor_blacklist();
       ilog("blacklist: ${a}\n", ("a", actor_blacklist));
-      auto hash = my->generate_hash(actor_blacklist);
-      ilog("new hash: ${hash}", ("hash", hash));
+      //auto hash = my->generate_hash(actor_blacklist);
+      //ilog("new hash: ${hash}", ("hash", hash));
 
       blacklist_stats ret;
       ret.local_hash = my->actor_blacklist_hash;
@@ -116,7 +115,7 @@ namespace eosio {
          }
 
          if(options.count("actor-blacklist")){
-             auto blacklist_actors = options["actor-blacklist"].as<flat_set<account_name>>();
+             auto blacklist_actors = options["actor-blacklist"].as<std::vector<std::string>>();
              my->actor_blacklist_hash = my->generate_hash(blacklist_actors);
          }
 
