@@ -3,10 +3,11 @@
  *  @copyright defined in eos/LICENSE.txt
  */
 #pragma once
-#include <appbase/application.hpp>
-#include <eosio/http_plugin/http_plugin.hpp>
 #include <eosio/chain_plugin/chain_plugin.hpp>
+#include <eosio/http_plugin/http_plugin.hpp>
 #include <eosio/producer_plugin/producer_plugin.hpp>
+
+#include <appbase/application.hpp>
 
 namespace eosio {
 
