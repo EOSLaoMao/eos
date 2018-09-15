@@ -37,3 +37,5 @@ private:
 };
 
 }
+
+FC_REFLECT( eosio::blacklist_stats, (local_hash) )
