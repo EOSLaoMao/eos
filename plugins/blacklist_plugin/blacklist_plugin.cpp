@@ -75,6 +75,15 @@ namespace eosio {
       //auto hash = my->generate_hash(actor_blacklist);
       //ilog("new hash: ${hash}", ("hash", hash));
 
+      auto output=apply(actor_blacklist,[](account_name element){
+        std::ostringstream stringStream;
+        stringStream << "actor-blacklist=" << element.to_string() << "\n";
+        return stringStream.str();
+      });
+      std::string actor_str = std::accumulate(output.begin(), output.end(), std::string(""));
+      ilog("output: ${output}\n", ("output", output));
+      ilog("actor_str: ${s}\n", ("s", actor_str));
+
       blacklist_stats ret;
       ret.local_hash = my->actor_blacklist_hash;
       ilog("old hash: ${hash}", ("hash", my->actor_blacklist_hash));
