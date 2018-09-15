@@ -10,6 +10,11 @@ namespace eosio {
 class producer_blacklist_plugin_impl {
    public:
 
+      account_name producer_name;
+      fc::crypto::private_key _blacklist_private_key;
+      chain::public_key_type _blacklist_public_key;
+      std::string actor_blacklist_hash = "";
+
       void check_blacklist() {
          ilog("blacklist checking");
       }
