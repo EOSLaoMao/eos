@@ -5,6 +5,7 @@
 #include <fc/variant.hpp>
 #include <fc/io/json.hpp>
 #include <eosio/chain/controller.hpp>
+#include <eosio/chain_api_plugin/chain_api_plugin.hpp>
 #include <eosio/blacklist_plugin/blacklist_plugin.hpp>
 
 namespace eosio {
@@ -78,15 +79,15 @@ namespace eosio {
          //std::vector<std::string> get_onchain_actor_blacklist()
          void get_onchain_actor_blacklist()
          {
-            chain::controller& chain = app().get_plugin<chain_plugin>().chain();
-            chain::get_table_rows_params p;
+            auto ro_api = app().get_plugin<chain_plugin>().get_read_only_api();
+            eosio::chain_apis::read_only::get_table_rows_params p;
             p.code = N(theblacklist);
             p.scope = N(theblacklist);
             p.table = N(theblacklist);
             p.limit = 100;
             p.json = true;
-            auto rows = chain.get_table_rows(p);
-            ilog("table row:", rows);
+            auto rows = ro_api.get_table_rows(p);
+            ilog("table row: ${rows}", ("rows", rows));
          }
 
 
