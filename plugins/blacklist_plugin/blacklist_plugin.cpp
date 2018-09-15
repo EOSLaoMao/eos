@@ -39,17 +39,17 @@ namespace eosio {
          void check_blacklist() {
             ilog("blacklist hash: ${hash}", ("hash", actor_blacklist_hash));
          }
-
-         blacklist_stats get() {
-            blacklist_stats ret;
-            ret.local_hash = actor_blacklist_hash;
-            return ret;
-         }
   
    };
 
    blacklist_plugin::blacklist_plugin():my(new blacklist_plugin_impl()){}
    blacklist_plugin::~blacklist_plugin(){}
+
+   blacklist_stats blacklist_plugin::get() {
+      blacklist_stats ret;
+      ret.local_hash = actor_blacklist_hash;
+      return ret;
+   }
 
    void blacklist_plugin::set_program_options(options_description&, options_description& cfg) {
 

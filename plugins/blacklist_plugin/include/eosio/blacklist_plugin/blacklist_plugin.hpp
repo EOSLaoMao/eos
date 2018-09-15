@@ -32,6 +32,7 @@ public:
    void plugin_initialize(const variables_map& options);
    void plugin_startup();
    void plugin_shutdown();
+   blacklist_stats get();
 
 private:
    std::unique_ptr<class blacklist_plugin_impl> my;
