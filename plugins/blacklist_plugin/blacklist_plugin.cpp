@@ -63,7 +63,7 @@ namespace eosio {
             return (std::string)fc::sha256::hash(actor_str);
           }
 
-         std::vector<std::string> void get_local_actor_blacklist()
+         std::vector<std::string> get_local_actor_blacklist()
          {
             chain::controller& chain = app().get_plugin<chain_plugin>().chain();
             auto actor_blacklist = chain.get_actor_blacklist();
