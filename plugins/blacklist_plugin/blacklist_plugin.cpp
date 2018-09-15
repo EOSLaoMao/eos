@@ -86,7 +86,6 @@ namespace eosio {
             p.limit = 100; // TODO, will became a BUG if rows are more than 100
             p.json = true;
             std::vector<std::string> actors;
-            std::vector<std::string> chunk;
 
             auto rows = ro_api.get_table_rows(p).rows;
             //rows is a vector<fc::variant> type
@@ -95,14 +94,10 @@ namespace eosio {
               if (row["type"] == "actor-blacklist") {
                  ilog("table row: ${row}\n", ("row", row));
                  ilog("table row accounts: ${accounts}\n", ("accounts", row["accounts"]));
-                 chunk = apply(row["accounts"],[](account_name element){
-                    std::ostringstream stringStream;
-                    stringStream << element.to_string();
-                    return stringStream.str();
-                 });
-                 ilog("chunk actors: ${a}\n", ("a", chunk));
-                 actors.insert(actors.end(), chunk.begin(), chunk.end());
-                 ilog("pending actors: ${a}\n", ("a", actors));
+                 for ( auto &account : row["accounts"] ) {
+                    ilog("account: ${a}\n", ("a", account));
+                    actors.push_bach(account.to_string());
+                 }
               }
             }
             return actors;
