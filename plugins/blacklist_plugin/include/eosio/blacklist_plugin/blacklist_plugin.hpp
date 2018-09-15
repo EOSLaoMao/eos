@@ -32,7 +32,8 @@ public:
    void plugin_initialize(const variables_map& options);
    void plugin_startup();
    void plugin_shutdown();
-   blacklist_stats checkhash();
+   std::string generate_hash();
+   blacklist_stats check_hash();
 
 private:
    std::unique_ptr<class blacklist_plugin_impl> my;

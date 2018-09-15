@@ -43,7 +43,7 @@ namespace eosio {
   
    };
 
-   std::string generate_hash(std::vector<std::string> &actors)
+   std::string blacklist_plugin::generate_hash(std::vector<std::string> &actors)
     {
       sort(actors.begin(), actors.end());
       auto output=apply(actors,[](std::string element){
@@ -58,11 +58,11 @@ namespace eosio {
    blacklist_plugin::blacklist_plugin():my(new blacklist_plugin_impl()){}
    blacklist_plugin::~blacklist_plugin(){}
 
-   blacklist_stats blacklist_plugin::checkhash() {
+   blacklist_stats blacklist_plugin::check_hash() {
       chain::controller& chain = app().get_plugin<chain_plugin>().chain();
       auto actor_blacklist = chain.get_actor_blacklist();
       ilog("blacklist: ${a}\n", ("a", actor_blacklist));
-      auto hash = generate_hash(actor_blacklist);
+      auto hash = this.generate_hash(actor_blacklist);
       ilog("new hash: ${hash}", ("hash", hash));
 
       blacklist_stats ret;
@@ -157,8 +157,8 @@ namespace eosio {
    void blacklist_plugin::plugin_startup() {
      ilog("producer blacklist plugin:  plugin_startup() begin");
       app().get_plugin<http_plugin>().add_api({
-          CALL(blacklist, this, checkhash,
-               INVOKE_R_V(this, checkhash), 200),
+          CALL(blacklist, this, check_hash,
+               INVOKE_R_V(this, check_hash), 200),
       });
      try{
         my->check_blacklist();
