@@ -28,6 +28,16 @@ namespace eosio {
     #define INVOKE_R_V(api_handle, call_name) \
     auto result = api_handle->call_name();
 
+   template <class Container, class Function>
+   auto apply (const Container &cont, Function fun) {
+       std::vector< typename
+               std::result_of<Function(const typename Container::value_type&)>::type> ret;
+       ret.reserve(cont.size());
+       for (const auto &v : cont) {
+          ret.push_back(fun(v));
+       }
+       return ret;
+   }
 
    class blacklist_plugin_impl {
       public:
@@ -41,7 +51,8 @@ namespace eosio {
             ilog("blacklist hash: ${hash}", ("hash", actor_blacklist_hash));
          }
 
-         std::string generate_hash(std::vector<std::string> &actors)
+         //std::string generate_hash(std::vector<std::string> &actors)
+         std::string generate_hash(const flat_set<account_name>& actors)
           {
             sort(actors.begin(), actors.end());
             auto output=apply(actors,[](std::string element){
@@ -83,17 +94,6 @@ namespace eosio {
             ;
    }
 
-   template <class Container, class Function>
-   auto apply (const Container &cont, Function fun) {
-       std::vector< typename
-               std::result_of<Function(const typename Container::value_type&)>::type> ret;
-       ret.reserve(cont.size());
-       for (const auto &v : cont) {
-          ret.push_back(fun(v));
-       }
-       return ret;
-   }
-
    void blacklist_plugin::plugin_initialize(const variables_map& options) {
       try {
 
@@ -116,7 +116,7 @@ namespace eosio {
          }
 
          if(options.count("actor-blacklist")){
-             auto blacklist_actors = options["actor-blacklist"].as<std::vector<std::string>>();
+             auto blacklist_actors = options["actor-blacklist"].as<flat_set<account_name>>();
              my->actor_blacklist_hash = my->generate_hash(blacklist_actors);
          }
 
