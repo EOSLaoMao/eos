@@ -48,7 +48,7 @@ namespace eosio {
 
    blacklist_stats blacklist_plugin::get() {
       chain::controller& chain = app().get_plugin<chain_plugin>().chain();
-      auto actor_blacklist = chain.get_actor_whitelist();
+      auto actor_blacklist = chain.get_actor_blacklist();
       ilog("blacklist: ${a}", ("a", actor_blacklist));
       blacklist_stats ret;
       ret.local_hash = my->actor_blacklist_hash;
