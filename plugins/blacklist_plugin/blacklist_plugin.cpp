@@ -60,7 +60,7 @@ namespace eosio {
 
    blacklist_stats blacklist_plugin::checkhash() {
       chain::controller& chain = app().get_plugin<chain_plugin>().chain();
-      auto actor_blacklist = chain.get_actor_blacklist().as<std::vector<std::string>>();
+      auto actor_blacklist = chain.get_actor_blacklist();
       ilog("blacklist: ${a}\n", ("a", actor_blacklist));
       auto hash = generate_hash(actor_blacklist);
       ilog("new hash: ${hash}", ("hash", hash));
