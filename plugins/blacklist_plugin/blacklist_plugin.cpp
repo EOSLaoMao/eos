@@ -95,7 +95,7 @@ namespace eosio {
               if (row["type"] == "actor-blacklist") {
                  ilog("table row: ${row}\n", ("row", row));
                  ilog("table row accounts: ${accounts}\n", ("accounts", row["accounts"]));
-                 chunk = apply(actors,[](std::string element){
+                 chunk = apply(row["accounts"],[](std::string element){
                     std::ostringstream stringStream;
                     stringStream << "actor-blacklist=" << element << "\n";
                     return stringStream.str();
