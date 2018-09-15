@@ -5,7 +5,6 @@
 #include <fc/variant.hpp>
 #include <fc/io/json.hpp>
 #include <eosio/chain/controller.hpp>
-#include <eosio/chain_api_plugin/chain_api_plugin.hpp>
 #include <eosio/blacklist_plugin/blacklist_plugin.hpp>
 
 namespace eosio {

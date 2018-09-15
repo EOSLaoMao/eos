@@ -4,6 +4,7 @@
  */
 #pragma once
 #include <eosio/chain_plugin/chain_plugin.hpp>
+#include <eosio/chain_api_plugin/chain_api_plugin.hpp>
 #include <eosio/http_plugin/http_plugin.hpp>
 #include <eosio/producer_plugin/producer_plugin.hpp>
 
