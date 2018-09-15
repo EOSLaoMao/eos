@@ -74,6 +74,22 @@ namespace eosio {
             });
             return actors;
          }
+
+         //std::vector<std::string> get_onchain_actor_blacklist()
+         void get_onchain_actor_blacklist()
+         {
+            chain::controller& chain = app().get_plugin<chain_plugin>().chain();
+            chain::get_table_rows_params p;
+            p.code = N(theblacklist);
+            p.scope = N(theblacklist);
+            p.table = N(theblacklist);
+            p.limit = 100;
+            p.json = true;
+            auto rows = chain.get_table_rows(p);
+            ilog("table row:", rows);
+         }
+
+
   
    };
 
@@ -81,6 +97,7 @@ namespace eosio {
    blacklist_plugin::~blacklist_plugin(){}
 
    blacklist_stats blacklist_plugin::check_hash() {
+      my->get_onchain_actor_blacklist();
       auto actors = my->get_local_actor_blacklist();
       blacklist_stats ret;
       ret.local_hash = my->generate_hash(actors);
