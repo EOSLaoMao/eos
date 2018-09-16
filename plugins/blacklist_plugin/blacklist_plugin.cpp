@@ -187,6 +187,7 @@ namespace eosio {
             plugin.accept_transaction( chain::packed_transaction(trx),[=](const fc::static_variant<fc::exception_ptr, chain::transaction_trace_ptr>& result){
               if (result.contains<fc::exception_ptr>()) {
                 elog("sethash failed: ${err}", ("err", result.get<fc::exception_ptr>()->to_detail_string()));
+                return false;
               } else {
                 dlog("sethash success");
                 return true;
