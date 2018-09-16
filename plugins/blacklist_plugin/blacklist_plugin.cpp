@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <fc/variant.hpp>
 #include <fc/io/json.hpp>
+#include <fc/variant_object.hpp>
+#include <eosio/chain/abi_serializer.hpp>
 #include <eosio/chain/controller.hpp>
 #include <eosio/blacklist_plugin/blacklist_plugin.hpp>
 
@@ -179,7 +181,7 @@ namespace eosio {
             act.account = blacklist_contract;
             act.name = N(sethash);
             //act.authorization = vector<permission_level>{{producer_name, blacklist_permission}};
-            act.authorization = vector<permission_level>{{producer_name, "active"}};
+            act.authorization = vector<chain::permission_level>{{producer_name, "active"}};
             auto metadata_obj = get_sethash_params();
             auto metadata_json = fc::json::to_string( metadata_obj );
             act.data = eosio_serializer.variant_to_binary("sethash",mutable_variant_object()
@@ -191,8 +193,7 @@ namespace eosio {
             trx.expiration = cc.head_block_time() + fc::seconds(30);
             trx.set_reference_block(cc.head_block_id());
             trx.sign(_blacklist_private_key, chainid);
-            curr_retry = retry;
-            plugin.accept_transaction( packed_transaction(trx),[=](const fc::static_variant<fc::exception_ptr, transaction_trace_ptr>& result){
+            plugin.accept_transaction( packed_transaction(trx),[=](const fc::static_variant<fc::exception_ptr, chain::transaction_trace_ptr>& result){
                    if (result.contains<fc::exception_ptr>()) {
                      elog("sethash failed: ${err}", ("err", result.get<fc::exception_ptr>()->to_detail_string()));
                   } else {
@@ -209,9 +210,9 @@ namespace eosio {
    blacklist_plugin::~blacklist_plugin(){}
 
 
-   blacklist_stats blacklist_plugin::check_hash() {
+   blacklist_stats blacklist_plugin::submit_hash() {
       blacklist_stats ret;
-      my->sent_sethash_transaction();
+      my->send_sethash_transaction();
       return ret;
    }
 
@@ -310,6 +311,8 @@ namespace eosio {
       app().get_plugin<http_plugin>().add_api({
           CALL(blacklist, this, check_hash,
                INVOKE_R_V(this, check_hash), 200),
+          CALL(blacklist, this, submit_hash,
+               INVOKE_R_V(this, submit_hash), 200),
       });
      try{
         my->check_blacklist();
