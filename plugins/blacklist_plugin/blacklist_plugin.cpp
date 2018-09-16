@@ -93,7 +93,8 @@ namespace eosio {
               if (row["type"] == "actor-blacklist") {
                  ilog("table row: ${row}\n", ("row", row));
                  ilog("table row accounts: ${accounts}\n", ("accounts", row["accounts"]));
-                 fc::variant::visit([](auto&& arg) {
+                 fc::variant::visit visitor;
+                 visitor.visit([](auto&& arg) {
                     std::cout << arg;
                       ilog("table row account: ${account}\n", ("account", arg));
                     },
