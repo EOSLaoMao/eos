@@ -20,7 +20,9 @@ using namespace appbase;
 
 struct blacklist_stats {
    std::string                 local_hash;
-   std::string                 onchain_hash;
+   std::string                 submitted_hash;
+   std::string                 ecaf_hash;
+   std::string                 msg;
 };
 
 class blacklist_plugin : public appbase::plugin<blacklist_plugin> {
@@ -42,4 +44,4 @@ private:
 
 }
 
-FC_REFLECT( eosio::blacklist_stats, (local_hash) )
+FC_REFLECT( eosio::blacklist_stats, (local_hash)(submitted_hash)(ecaf_hash)(msg) )

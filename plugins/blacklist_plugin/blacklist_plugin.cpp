@@ -60,6 +60,7 @@ namespace eosio {
               return stringStream.str();
             });
             std::string actor_str = std::accumulate(output.begin(), output.end(), std::string(""));
+            ilog("actors in generate_hash: ${a}", ("a", actors));
             return (std::string)fc::sha256::hash(actor_str);
           }
 
@@ -67,12 +68,33 @@ namespace eosio {
          {
             chain::controller& chain = app().get_plugin<chain_plugin>().chain();
             auto actor_blacklist = chain.get_actor_blacklist();
-            auto actors=apply(actor_blacklist,[](account_name element){
+            auto accounts=apply(actor_blacklist,[](account_name element){
               std::ostringstream stringStream;
               stringStream << element.to_string();
               return stringStream.str();
             });
-            return actors;
+            return accounts;
+         }
+
+         std::string get_submitted_hash()
+         {
+            auto ro_api = app().get_plugin<chain_plugin>().get_read_only_api();
+            eosio::chain_apis::read_only::get_table_rows_params p;
+        
+            p.code = eosio::chain::string_to_name("theblacklist");
+            p.scope = "theblacklist";
+            p.table = eosio::chain::string_to_name("producerhash");
+            p.limit = 100; // TODO, will became a BUG if rows are more than 100
+            p.json = true;
+            std::vector<std::string> actors;
+            std::string hash="";
+            auto rows = ro_api.get_table_rows(p).rows;
+            for ( auto &row : rows ) {
+               if (row["producer"] == my->producer-name) {
+                  hash = row["hash"];
+               }
+            }
+            return hash;
          }
 
          std::vector<std::string> get_onchain_actor_blacklist()
@@ -85,25 +107,18 @@ namespace eosio {
             p.table = eosio::chain::string_to_name("theblacklist");
             p.limit = 100; // TODO, will became a BUG if rows are more than 100
             p.json = true;
-            std::vector<std::string> actors;
+            std::vector<std::string> accounts;
             auto rows = ro_api.get_table_rows(p).rows;
             //rows is a vector<fc::variant> type
-            ilog("table rows: ${rows}\n", ("rows", rows));
             for ( auto &row : rows ) {
               if (row["type"] == "actor-blacklist") {
-                 ilog("table row: ${row}\n", ("row", row));
-                 ilog("table row accounts: ${accounts}\n", ("accounts", row["accounts"]));
-                 auto accounts = row["accounts"];
-                 ilog("table row is array: ${i}\n", ("i", accounts.is_array()));
-                 ilog("table row get_array: ${i}\n", ("i", accounts.get_array()));
-                 //ilog("accounts: ${a}", ("a", row["accounts"].get(account_name)));
-                 for ( auto &account : accounts.get_array() ) {
+                 for ( auto &account : row["accounts"].get_array() ) {
                     ilog("account: ${a}\n", ("a", account));
-                    actors.push_back(account.as_string());
+                    accounts.push_back(account.as_string());
                  }
               }
             }
-            return actors;
+            return accounts;
          }
 
 
@@ -114,13 +129,16 @@ namespace eosio {
    blacklist_plugin::~blacklist_plugin(){}
 
    blacklist_stats blacklist_plugin::check_hash() {
-      auto onchain_actors = my->get_onchain_actor_blacklist();
-      auto local_actors = my->get_local_actor_blacklist();
+      auto onchain_blacklist_accounts = my->get_onchain_actor_blacklist();
+      auto local_blacklist_accounts = my->get_local_actor_blacklist();
       ilog("on chain actors: ${a}\n", ("a", onchain_actors));
 
       blacklist_stats ret;
-      ret.local_hash = my->generate_hash(local_actors);
-      ret.onchain_hash = my->generate_hash(onchain_actors);
+      ret.local_hash = my->generate_hash(local_blacklist_accounts);
+      ret.ecaf_hash = my->generate_hash(onchain_blacklist_accounts);
+      ret.submitted_hash = my->get_submitted_hash();
+      ret.msg = "local VS ecaf hash: " + ret.local_hash==ret.ecaf_hash?"MATCH":"MISMATCH!!";
+      ret.msg += ("local VS submitted hash: " + ret.local_hash==ret.submitted_hash?"MATCH":"MISMATCH!!");
       return ret;
    }
 
