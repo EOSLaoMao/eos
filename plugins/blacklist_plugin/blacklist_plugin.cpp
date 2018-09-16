@@ -189,7 +189,7 @@ namespace eosio {
                 elog("sethash failed: ${err}", ("err", result.get<fc::exception_ptr>()->to_detail_string()));
               } else {
                 dlog("sethash success");
-                ret = true;
+                return true;
               }
             });
             return ret;
