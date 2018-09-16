@@ -167,7 +167,7 @@ namespace eosio {
             auto abi_serializer_max_time = plugin.get_abi_serializer_max_time();
 
             controller& cc = plugin.chain();
-            auto* account_obj = cc.db().find<chain::account_object, by_name>(blacklist_contract);
+            auto* account_obj = cc.db().find<chain::account_object, chain::by_name>(blacklist_contract);
             if(account_obj == nullptr)
                return;
             abi_def abi;
