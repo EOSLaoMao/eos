@@ -176,8 +176,8 @@ namespace eosio {
             if(!producer_name)
                return;
             abi_serializer eosio_serializer(abi, abi_serializer_max_time);
-            signed_transaction trx;
-            action act;
+            chain::signed_transaction trx;
+            chain::action act;
             act.account = blacklist_contract;
             act.name = N(sethash);
             //act.authorization = vector<permission_level>{{producer_name, blacklist_permission}};
