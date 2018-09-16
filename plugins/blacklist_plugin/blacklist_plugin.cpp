@@ -60,8 +60,7 @@ namespace eosio {
          chain::public_key_type _blacklist_public_key;
          std::string actor_blacklist_hash = "";
          std::string blacklist_permission = "";
-
-
+         bool submit_hash_status = false;
 
          std::string generate_hash(std::vector<std::string> &actors)
           {
@@ -154,7 +153,7 @@ namespace eosio {
          }
 
         bool send_sethash_transaction(){
-            bool ret = false;
+            submit_hash_status = false;
             auto& plugin = app().get_plugin<chain_plugin>();
 
             auto chainid = plugin.get_chain_id();
@@ -163,12 +162,12 @@ namespace eosio {
             controller& cc = plugin.chain();
             auto* account_obj = cc.db().find<chain::account_object, chain::by_name>(blacklist_contract);
             if(account_obj == nullptr)
-               return ret;
+               return submit_hash_status;
             abi_def abi;
             if (!abi_serializer::to_abi(account_obj->abi, abi))
-               return ret;
+               return submit_hash_status;
             if(!producer_name)
-               return ret;
+               return submit_hash_status;
             abi_serializer eosio_serializer(abi, abi_serializer_max_time);
             chain::signed_transaction trx;
             chain::action act;
@@ -186,14 +185,14 @@ namespace eosio {
             trx.sign(_blacklist_private_key, chainid);
             plugin.accept_transaction( chain::packed_transaction(trx),[=](const fc::static_variant<fc::exception_ptr, chain::transaction_trace_ptr>& result){
               if (result.contains<fc::exception_ptr>()) {
-                ret = false;
+                submit_hash_status = false;
                 elog("sethash failed: ${err}", ("err", result.get<fc::exception_ptr>()->to_detail_string()));
               } else {
-                ret = true;
+                submit_hash_status = true;
                 dlog("sethash success");
               }
             });
-            return ret;
+            return submit_hash_status;
         }
 
 
