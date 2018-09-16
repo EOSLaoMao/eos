@@ -90,14 +90,15 @@ namespace eosio {
             std::string hash="";
             auto rows = ro_api.get_table_rows(p).rows;
             ilog("producerhash rows: ${a}\n", ("a", rows));
-            /*
             for ( auto &row : rows ) {
+               ilog("producerhash row: ${a}\n", ("a", row));
+               /*
                if (row["producer"] == producer_name) {
                   hash = row["hash"];
                   break;
                }
+               */
             }
-            */
             return hash;
          }
 
