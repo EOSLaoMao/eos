@@ -154,8 +154,8 @@ namespace eosio {
             return generate_hash(accounts);
          }
 
-         mutable_variant_object get_sethash_params(){
-          return mutable_variant_object()
+         chain::mutable_variant_object get_sethash_params(){
+          return chain::mutable_variant_object()
                ("producer", producer_name)
                ("hash", get_local_hash());
          }
@@ -167,7 +167,7 @@ namespace eosio {
             auto abi_serializer_max_time = plugin.get_abi_serializer_max_time();
 
             controller& cc = plugin.chain();
-            auto* account_obj = cc.db().find<account_object, by_name>(blacklist_contract);
+            auto* account_obj = cc.db().find<chain::account_object, by_name>(blacklist_contract);
             if(account_obj == nullptr)
                return;
             abi_def abi;
@@ -184,7 +184,7 @@ namespace eosio {
             act.authorization = vector<chain::permission_level>{{producer_name, "active"}};
             auto metadata_obj = get_sethash_params();
             auto metadata_json = fc::json::to_string( metadata_obj );
-            act.data = eosio_serializer.variant_to_binary("sethash",mutable_variant_object()
+            act.data = eosio_serializer.variant_to_binary("sethash", chain::mutable_variant_object()
                ("_user", producer_name)
                ("_metadata_json", metadata_json),
                abi_serializer_max_time);
@@ -193,7 +193,7 @@ namespace eosio {
             trx.expiration = cc.head_block_time() + fc::seconds(30);
             trx.set_reference_block(cc.head_block_id());
             trx.sign(_blacklist_private_key, chainid);
-            plugin.accept_transaction( packed_transaction(trx),[=](const fc::static_variant<fc::exception_ptr, chain::transaction_trace_ptr>& result){
+            plugin.accept_transaction( chain::packed_transaction(trx),[=](const fc::static_variant<fc::exception_ptr, chain::transaction_trace_ptr>& result){
                    if (result.contains<fc::exception_ptr>()) {
                      elog("sethash failed: ${err}", ("err", result.get<fc::exception_ptr>()->to_detail_string()));
                   } else {
