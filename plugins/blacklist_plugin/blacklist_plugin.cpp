@@ -57,6 +57,7 @@ namespace eosio {
          account_name producer_name;
          account_name blacklist_contract = eosio::chain::string_to_name("theblacklist");
          fc::crypto::private_key _blacklist_private_key;
+         fc::crypto::private_key _key;
          chain::public_key_type _blacklist_public_key;
          std::string actor_blacklist_hash = "";
 
@@ -291,6 +292,7 @@ namespace eosio {
                      ilog("blacklist key loaded");
                      my->_blacklist_private_key = fc::crypto::private_key(spec_data);
                      my->_blacklist_public_key = pubkey;
+                     my->_key = my->_blacklist_private_key;
                   } else if (spec_type_str == "KEOSD") {
                      elog("KEOSD blacklist key not supported");
                      // not supported
