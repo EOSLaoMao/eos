@@ -99,7 +99,7 @@ namespace eosio {
                  //ilog("accounts: ${a}", ("a", row["accounts"].get(account_name)));
                  for ( auto &account : accounts.get_array() ) {
                     ilog("account: ${a}\n", ("a", account));
-                    actors.push_back(account.to_string());
+                    actors.push_back(account.as_string());
                  }
               }
             }
