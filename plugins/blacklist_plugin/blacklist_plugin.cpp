@@ -65,10 +65,10 @@ namespace eosio {
 
          std::string generate_hash(std::vector<std::string> &actors)
           {
-            ilog("actors in generate_hash before: ${a}", ("a", actors));
+            //ilog("actors in generate_hash before: ${a}", ("a", actors));
             //remove duplicates
             remove_duplicates(actors);
-            ilog("actors in generate_hash after: ${a}", ("a", actors));
+            //ilog("actors in generate_hash after: ${a}", ("a", actors));
             sort(actors.begin(), actors.end());
             auto output=apply(actors,[](std::string element){
               std::ostringstream stringStream;
@@ -76,7 +76,7 @@ namespace eosio {
               return stringStream.str();
             });
             std::string actor_str = std::accumulate(output.begin(), output.end(), std::string(""));
-            ilog("actor_str in generate_hash: ${a}", ("a", actor_str));
+            //ilog("actor_str in generate_hash: ${a}", ("a", actor_str));
             return (std::string)fc::sha256::hash(actor_str);
           }
 
@@ -105,12 +105,12 @@ namespace eosio {
             std::vector<std::string> actors;
             std::string hash="";
             auto rows = ro_api.get_table_rows(p).rows;
-            ilog("producerhash rows: ${a}\n", ("a", rows));
+            //ilog("producerhash rows: ${a}\n", ("a", rows));
             for ( auto &row : rows ) {
-               ilog("producerhash row: ${a}\n", ("a", row));
+               //ilog("producerhash row: ${a}\n", ("a", row));
                auto obj = row.get_object();
-               ilog("producerhash row hash: ${a}\n", ("a", obj["hash"]));
-               ilog("producerhash row producer: ${a}\n", ("a", obj["producer"]));
+               //ilog("producerhash row hash: ${a}\n", ("a", obj["hash"]));
+               //ilog("producerhash row producer: ${a}\n", ("a", obj["producer"]));
                if (obj["producer"].as_string() == producer_name) {
                   hash = obj["hash"].as_string();
                   break;
@@ -135,7 +135,7 @@ namespace eosio {
             for ( auto &row : rows ) {
               if (row["type"] == "actor-blacklist") {
                  for ( auto &account : row["accounts"].get_array() ) {
-                    ilog("account: ${a}\n", ("a", account));
+                    //ilog("account: ${a}\n", ("a", account));
                     accounts.push_back(account.as_string());
                  }
               }
@@ -221,6 +221,7 @@ namespace eosio {
       } else {
         ret.msg = "local/submitted/eacf hash should all match!";
       }
+      return ret;
    }
 
    void blacklist_plugin::set_program_options(options_description&, options_description& cfg) {
@@ -283,12 +284,12 @@ namespace eosio {
                   
                   
                   if (spec_type_str == "KEY") {
-                     ilog("blacklist key loaded");
+                     ilog("blacklist submit hash key loaded");
                      my->_blacklist_private_key = fc::crypto::private_key(spec_data);
                      my->_blacklist_public_key = pubkey;
                   } else if (spec_type_str == "KEOSD") {
+                     // Does not support KEOSD key
                      elog("KEOSD blacklist key not supported");
-                     // not supported
                   }
       
                } catch (...) {
@@ -308,8 +309,9 @@ namespace eosio {
                INVOKE_R_V(this, submit_hash), 200),
       });
      try{
-        auto hash = my->get_local_hash();
-        ilog("blacklist hash: ${hash}", ("hash", hash));
+        ilog("local actor blacklist hash:     ${hash}", ("hash", my->get_local_hash()));
+        ilog("ecaf actor blacklist hash:      ${hash}", ("hash", my->get_ecaf_hash()));
+        ilog("submitted actor blacklist hash: ${hash}", ("hash", my->get_submitted_hash()));
      }
      FC_LOG_AND_DROP();
    }
