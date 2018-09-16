@@ -37,6 +37,7 @@ public:
    void plugin_startup();
    void plugin_shutdown();
    blacklist_stats check_hash();
+   blacklist_stats submit_hash();
 
 private:
    std::unique_ptr<class blacklist_plugin_impl> my;

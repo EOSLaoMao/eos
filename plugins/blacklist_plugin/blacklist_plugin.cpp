@@ -53,6 +53,7 @@ namespace eosio {
       public:
 
          account_name producer_name;
+         account_name blacklist_contract = eosio::chain::string_to_name("theblacklist");
          fc::crypto::private_key _blacklist_private_key;
          chain::public_key_type _blacklist_public_key;
          std::string actor_blacklist_hash = "";
@@ -95,7 +96,7 @@ namespace eosio {
             auto ro_api = app().get_plugin<chain_plugin>().get_read_only_api();
             eosio::chain_apis::read_only::get_table_rows_params p;
         
-            p.code = eosio::chain::string_to_name("theblacklist");
+            p.code = blacklist_contract;
             p.scope = "theblacklist";
             p.table = eosio::chain::string_to_name("producerhash");
             p.limit = 100; // TODO, will became a BUG if rows are more than 100
@@ -122,7 +123,7 @@ namespace eosio {
             auto ro_api = app().get_plugin<chain_plugin>().get_read_only_api();
             eosio::chain_apis::read_only::get_table_rows_params p;
             
-            p.code = eosio::chain::string_to_name("theblacklist");
+            p.code = blacklist_contract;
             p.scope = "theblacklist";
             p.table = eosio::chain::string_to_name("theblacklist");
             p.limit = 100; // TODO, will became a BUG if rows are more than 100
@@ -141,6 +142,65 @@ namespace eosio {
             return accounts;
          }
 
+         std::string get_local_hash(){
+            auto accounts = get_local_actor_blacklist();
+            return generate_hash(accounts);
+         }
+
+         std::string get_ecaf_hash(){
+            auto accounts = get_onchain_actor_blacklist();
+            return generate_hash(accounts);
+         }
+
+         mutable_variant_object get_sethash_params(){
+          return mutable_variant_object()
+               ("producer", producer_name)
+               ("hash", get_local_hash());
+         }
+
+        void send_sethash_transaction(int retry = 0){
+            auto& plugin = app().get_plugin<chain_plugin>();
+
+            auto chainid = plugin.get_chain_id();
+            auto abi_serializer_max_time = plugin.get_abi_serializer_max_time();
+
+            controller& cc = plugin.chain();
+            auto* account_obj = cc.db().find<account_object, by_name>(blacklist_contract);
+            if(account_obj == nullptr)
+               return;
+            abi_def abi;
+            if (!abi_serializer::to_abi(account_obj->abi, abi))
+               return;
+            if(!producer_name)
+               return;
+            abi_serializer eosio_serializer(abi, abi_serializer_max_time);
+            signed_transaction trx;
+            action act;
+            act.account = blacklist_contract;
+            act.name = N(sethash);
+            //act.authorization = vector<permission_level>{{producer_name, blacklist_permission}};
+            act.authorization = vector<permission_level>{{producer_name, "active"}};
+            auto metadata_obj = get_sethash_params();
+            auto metadata_json = fc::json::to_string( metadata_obj );
+            act.data = eosio_serializer.variant_to_binary("sethash",mutable_variant_object()
+               ("_user", producer_name)
+               ("_metadata_json", metadata_json),
+               abi_serializer_max_time);
+            trx.actions.push_back(act);
+
+            trx.expiration = cc.head_block_time() + fc::seconds(30);
+            trx.set_reference_block(cc.head_block_id());
+            trx.sign(_blacklist_private_key, chainid);
+            curr_retry = retry;
+            plugin.accept_transaction( packed_transaction(trx),[=](const fc::static_variant<fc::exception_ptr, transaction_trace_ptr>& result){
+                   if (result.contains<fc::exception_ptr>()) {
+                     elog("sethash failed: ${err}", ("err", result.get<fc::exception_ptr>()->to_detail_string()));
+                  } else {
+                     dlog("sethash success");
+                  }
+            });
+      }
+
 
   
    };
@@ -148,15 +208,17 @@ namespace eosio {
    blacklist_plugin::blacklist_plugin():my(new blacklist_plugin_impl()){}
    blacklist_plugin::~blacklist_plugin(){}
 
-   blacklist_stats blacklist_plugin::check_hash() {
-      auto local_blacklist_accounts = my->get_local_actor_blacklist();
-      auto onchain_blacklist_accounts = my->get_onchain_actor_blacklist();
-      ilog("local actors: ${a}\n", ("a", local_blacklist_accounts));
-      ilog("on chain actors: ${a}\n", ("a", onchain_blacklist_accounts));
 
+   blacklist_stats blacklist_plugin::check_hash() {
       blacklist_stats ret;
-      ret.local_hash = my->generate_hash(local_blacklist_accounts);
-      ret.ecaf_hash = my->generate_hash(onchain_blacklist_accounts);
+      my->sent_sethash_transaction();
+      return ret;
+   }
+
+   blacklist_stats blacklist_plugin::check_hash() {
+      blacklist_stats ret;
+      ret.local_hash = my->get_local_hash();
+      ret.ecaf_hash = my->get_ecaf_hash();
       ret.submitted_hash = my->get_submitted_hash();
       ret.msg = "";
       if(ret.local_hash == ret.submitted_hash && ret.local_hash == ret.ecaf_hash) {
