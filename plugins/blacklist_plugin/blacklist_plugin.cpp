@@ -181,7 +181,7 @@ namespace eosio {
             act.account = blacklist_contract;
             act.name = N(sethash);
             //act.authorization = vector<permission_level>{{producer_name, blacklist_permission}};
-            act.authorization = vector<chain::permission_level>{{producer_name, "active"}};
+            act.authorization = vector<chain::permission_level>{{producer_name, "hashperm"}};
             act.data = eosio_serializer.variant_to_binary("sethash", chain::mutable_variant_object()
                ("producer", producer_name)
                ("hash", get_local_hash()),
