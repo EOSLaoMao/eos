@@ -90,8 +90,9 @@ namespace eosio {
             std::string hash="";
             auto rows = ro_api.get_table_rows(p).rows;
             for ( auto &row : rows ) {
-               if (row["producer"] == my->producer-name) {
+               if (row["producer"] == producer_name) {
                   hash = row["hash"];
+                  break;
                }
             }
             return hash;
@@ -129,9 +130,10 @@ namespace eosio {
    blacklist_plugin::~blacklist_plugin(){}
 
    blacklist_stats blacklist_plugin::check_hash() {
-      auto onchain_blacklist_accounts = my->get_onchain_actor_blacklist();
       auto local_blacklist_accounts = my->get_local_actor_blacklist();
-      ilog("on chain actors: ${a}\n", ("a", onchain_actors));
+      auto onchain_blacklist_accounts = my->get_onchain_actor_blacklist();
+      ilog("local actors: ${a}\n", ("a", local_blacklist_accounts));
+      ilog("on chain actors: ${a}\n", ("a", onchain_blacklist_accounts));
 
       blacklist_stats ret;
       ret.local_hash = my->generate_hash(local_blacklist_accounts);
