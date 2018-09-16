@@ -153,8 +153,7 @@ namespace eosio {
             return generate_hash(accounts);
          }
 
-        bool send_sethash_transaction(int retry = 0){
-            bool ret = false;
+        bool send_sethash_transaction(){
             auto& plugin = app().get_plugin<chain_plugin>();
 
             auto chainid = plugin.get_chain_id();
@@ -163,12 +162,12 @@ namespace eosio {
             controller& cc = plugin.chain();
             auto* account_obj = cc.db().find<chain::account_object, chain::by_name>(blacklist_contract);
             if(account_obj == nullptr)
-               return ret;
+               return false;
             abi_def abi;
             if (!abi_serializer::to_abi(account_obj->abi, abi))
-               return ret;
+               return false;
             if(!producer_name)
-               return ret;
+               return false;
             abi_serializer eosio_serializer(abi, abi_serializer_max_time);
             chain::signed_transaction trx;
             chain::action act;
@@ -193,7 +192,7 @@ namespace eosio {
                 return true;
               }
             });
-            return ret;
+            return true;
         }
 
 
