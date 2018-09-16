@@ -93,7 +93,8 @@ namespace eosio {
               if (row["type"] == "actor-blacklist") {
                  ilog("table row: ${row}\n", ("row", row));
                  ilog("table row accounts: ${accounts}\n", ("accounts", row["accounts"]));
-                 ilog("accounts: ${a}", ("a", row["accounts"].get(account_name)));
+                 ilog("table row accounts: ${accounts}\n", ("accounts", row["accounts"].to_string()));
+                 //ilog("accounts: ${a}", ("a", row["accounts"].get(account_name)));
                  /*
                  row["accounts"][0];
                  for ( auto &account : row["accounts"] ) {
