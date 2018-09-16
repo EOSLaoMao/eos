@@ -96,14 +96,11 @@ namespace eosio {
                  auto accounts = row["accounts"];
                  ilog("table row is array: ${i}\n", ("i", accounts.is_array()));
                  ilog("table row get_array: ${i}\n", ("i", accounts.get_array()));
-                 ilog("table row as_string: ${i}\n", ("i", accounts.as_string()));
                  //ilog("accounts: ${a}", ("a", row["accounts"].get(account_name)));
-                 /*
-                 row["accounts"][0];
-                 for ( auto &account : row["accounts"] ) {
+                 for ( auto &account : accounts.get_array() ) {
                     ilog("account: ${a}\n", ("a", account));
                     actors.push_back(account.to_string());
-                 }*/
+                 }
               }
             }
             return actors;
