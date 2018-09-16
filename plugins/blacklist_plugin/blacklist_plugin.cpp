@@ -89,12 +89,15 @@ namespace eosio {
             std::vector<std::string> actors;
             std::string hash="";
             auto rows = ro_api.get_table_rows(p).rows;
+            ilog("producerhash rows: ${a}\n", ("a", rows));
+            /*
             for ( auto &row : rows ) {
                if (row["producer"] == producer_name) {
                   hash = row["hash"];
                   break;
                }
             }
+            */
             return hash;
          }
 
