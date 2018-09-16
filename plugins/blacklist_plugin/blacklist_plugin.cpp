@@ -95,8 +95,8 @@ namespace eosio {
                auto obj = row.get_object();
                ilog("producerhash row hash: ${a}\n", ("a", obj["hash"]));
                ilog("producerhash row producer: ${a}\n", ("a", obj["producer"]));
-               if (obj["producer"] == producer_name) {
-                  hash = obj["hash"];
+               if (obj["producer"].as_string() == producer_name) {
+                  hash = obj["hash"].as_string();
                   break;
                }
             }
