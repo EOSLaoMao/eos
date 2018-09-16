@@ -59,10 +59,9 @@ namespace eosio {
          fc::crypto::private_key _blacklist_private_key;
          chain::public_key_type _blacklist_public_key;
          std::string actor_blacklist_hash = "";
+         std::string blacklist_permission = "";
 
-         void check_blacklist() {
-            ilog("blacklist hash: ${hash}", ("hash", actor_blacklist_hash));
-         }
+
 
          std::string generate_hash(std::vector<std::string> &actors)
           {
@@ -154,12 +153,6 @@ namespace eosio {
             return generate_hash(accounts);
          }
 
-         chain::mutable_variant_object get_sethash_params(){
-          return chain::mutable_variant_object()
-               ("producer", producer_name)
-               ("hash", get_local_hash());
-         }
-
         void send_sethash_transaction(int retry = 0){
             auto& plugin = app().get_plugin<chain_plugin>();
 
@@ -180,8 +173,7 @@ namespace eosio {
             chain::action act;
             act.account = blacklist_contract;
             act.name = N(sethash);
-            //act.authorization = vector<permission_level>{{producer_name, blacklist_permission}};
-            act.authorization = vector<chain::permission_level>{{producer_name, "hashperm"}};
+            act.authorization = vector<chain::permission_level>{{producer_name, blacklist_permission}};
             act.data = eosio_serializer.variant_to_binary("sethash", chain::mutable_variant_object()
                ("producer", producer_name)
                ("hash", get_local_hash()),
@@ -265,6 +257,10 @@ namespace eosio {
              my->producer_name = ops[0];
          }
 
+         if( options.count( "blacklist-permission" )) {
+            my->blacklist_permission = options.at( "blacklist-permission" ).as<string>();
+         }
+
          if(options.count("actor-blacklist")){
              auto blacklist_actors = options["actor-blacklist"].as<std::vector<std::string>>();
              my->actor_blacklist_hash = my->generate_hash(blacklist_actors);
@@ -313,7 +309,8 @@ namespace eosio {
                INVOKE_R_V(this, submit_hash), 200),
       });
      try{
-        my->check_blacklist();
+        auto hash = my->get_local_hash();
+        ilog("blacklist hash: ${hash}", ("hash", hash));
      }
      FC_LOG_AND_DROP();
    }
