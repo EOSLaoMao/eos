@@ -18,12 +18,18 @@ using namespace appbase;
  *  This is a template plugin, intended to serve as a starting point for making new plugins
  */
 
-struct blacklist_stats {
+struct check_hash_result {
    std::string                 local_hash;
    std::string                 submitted_hash;
    std::string                 ecaf_hash;
    std::string                 msg;
 };
+
+struct submit_hash_result {
+   std::string                 msg;
+};
+
+
 
 class blacklist_plugin : public appbase::plugin<blacklist_plugin> {
 public:
@@ -36,8 +42,8 @@ public:
    void plugin_initialize(const variables_map& options);
    void plugin_startup();
    void plugin_shutdown();
-   blacklist_stats check_hash();
-   blacklist_stats submit_hash();
+   check_hash_result check_hash();
+   submit_hash_result submit_hash();
 
 private:
    std::unique_ptr<class blacklist_plugin_impl> my;
@@ -45,4 +51,5 @@ private:
 
 }
 
-FC_REFLECT( eosio::blacklist_stats, (local_hash)(submitted_hash)(ecaf_hash)(msg) )
+FC_REFLECT( eosio::check_hash_result, (local_hash)(submitted_hash)(ecaf_hash)(msg) )
+FC_REFLECT( eosio::submit_hash_result, (msg) )

@@ -153,7 +153,8 @@ namespace eosio {
             return generate_hash(accounts);
          }
 
-        void send_sethash_transaction(int retry = 0){
+        bool send_sethash_transaction(int retry = 0){
+            bool result;
             auto& plugin = app().get_plugin<chain_plugin>();
 
             auto chainid = plugin.get_chain_id();
@@ -184,13 +185,16 @@ namespace eosio {
             trx.set_reference_block(cc.head_block_id());
             trx.sign(_blacklist_private_key, chainid);
             plugin.accept_transaction( chain::packed_transaction(trx),[=](const fc::static_variant<fc::exception_ptr, chain::transaction_trace_ptr>& result){
-                   if (result.contains<fc::exception_ptr>()) {
-                     elog("sethash failed: ${err}", ("err", result.get<fc::exception_ptr>()->to_detail_string()));
-                  } else {
-                     dlog("sethash success");
-                  }
+              if (result.contains<fc::exception_ptr>()) {
+                elog("sethash failed: ${err}", ("err", result.get<fc::exception_ptr>()->to_detail_string()));
+                result = false;
+              } else {
+                dlog("sethash success");
+                result = true;
+              }
             });
-      }
+            return result;
+        }
 
 
   
@@ -200,28 +204,23 @@ namespace eosio {
    blacklist_plugin::~blacklist_plugin(){}
 
 
-   blacklist_stats blacklist_plugin::submit_hash() {
-      blacklist_stats ret;
-      my->send_sethash_transaction();
+   submit_hash_result blacklist_plugin::submit_hash() {
+      submit_hash_result ret;
+      result = my->send_sethash_transaction();
+      ret.msg = result?"SUCCESS":"FAILED, check your nodeos log for error msg";
       return ret;
    }
 
-   blacklist_stats blacklist_plugin::check_hash() {
-      blacklist_stats ret;
+   check_hash_result blacklist_plugin::check_hash() {
+      check_hash_result ret;
       ret.local_hash = my->get_local_hash();
       ret.ecaf_hash = my->get_ecaf_hash();
       ret.submitted_hash = my->get_submitted_hash();
-      ret.msg = "";
       if(ret.local_hash == ret.submitted_hash && ret.local_hash == ret.ecaf_hash) {
         ret.msg = "OK";
+      } else {
+        ret.msg = "local/submitted/eacf hash should all match!";
       }
-      else if(ret.local_hash != ret.ecaf_hash) {
-         ret.msg += "local and ecaf hash MISMATCH!";
-      }
-      else if(ret.local_hash != ret.submitted_hash) {
-         ret.msg += "local and submitted hash MISMATCH!";
-      }
-      return ret;
    }
 
    void blacklist_plugin::set_program_options(options_description&, options_description& cfg) {
