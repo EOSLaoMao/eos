@@ -2,6 +2,7 @@
  *  @file
  *  @copyright defined in eos/LICENSE.txt
  */
+#include <algorithm>
 #include <fc/variant.hpp>
 #include <fc/io/json.hpp>
 #include <eosio/chain/controller.hpp>
@@ -28,6 +29,15 @@ namespace eosio {
     #define INVOKE_R_V(api_handle, call_name) \
     auto result = api_handle->call_name();
 
+
+
+   template <typename T>
+   void remove_duplicates(std::vector<T>& vec)
+   {
+     std::sort(vec.begin(), vec.end());
+     vec.erase(std::unique(vec.begin(), vec.end()), vec.end());
+   }
+
    template <class Container, class Function>
    auto apply (const Container &cont, Function fun) {
        std::vector< typename
@@ -53,6 +63,10 @@ namespace eosio {
 
          std::string generate_hash(std::vector<std::string> &actors)
           {
+            ilog("actors in generate_hash before: ${a}", ("a", actors));
+            //remove duplicates
+            remove_duplicates(actors);
+            ilog("actors in generate_hash after: ${a}", ("a", actors));
             sort(actors.begin(), actors.end());
             auto output=apply(actors,[](std::string element){
               std::ostringstream stringStream;
@@ -60,7 +74,7 @@ namespace eosio {
               return stringStream.str();
             });
             std::string actor_str = std::accumulate(output.begin(), output.end(), std::string(""));
-            ilog("actors in generate_hash: ${a}", ("a", actors));
+            ilog("actor_str in generate_hash: ${a}", ("a", actor_str));
             return (std::string)fc::sha256::hash(actor_str);
           }
 
@@ -145,12 +159,14 @@ namespace eosio {
       ret.ecaf_hash = my->generate_hash(onchain_blacklist_accounts);
       ret.submitted_hash = my->get_submitted_hash();
       ret.msg = "";
-      if(ret.local_hash != ret.ecaf_hash) {
+      if(ret.local_hash == ret.submitted_hash && ret.local_hash == ret.ecaf_hash) {
+        ret.msg = "OK";
+      }
+      else if(ret.local_hash != ret.ecaf_hash) {
          ret.msg += "local and ecaf hash MISMATCH!";
-      } else if(ret.local_hash != ret.submitted_hash) {
+      }
+      else if(ret.local_hash != ret.submitted_hash) {
          ret.msg += "local and submitted hash MISMATCH!";
-      } else {
-         ret.msg += "OK";
       }
       return ret;
    }
