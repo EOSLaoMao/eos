@@ -93,14 +93,12 @@ namespace eosio {
             for ( auto &row : rows ) {
                ilog("producerhash row: ${a}\n", ("a", row));
                auto obj = row.get_object();
-               ilog("producerhash row hash: ${a}\n", ("a", obj.hash));
-               ilog("producerhash row producer: ${a}\n", ("a", obj.producer));
-               /*
-               if (row["producer"] == producer_name) {
-                  hash = row["hash"];
+               ilog("producerhash row hash: ${a}\n", ("a", obj["hash"]));
+               ilog("producerhash row producer: ${a}\n", ("a", obj["producer"]));
+               if (obj["producer"] == producer_name) {
+                  hash = obj["hash"];
                   break;
                }
-               */
             }
             return hash;
          }
@@ -147,10 +145,10 @@ namespace eosio {
       ret.ecaf_hash = my->generate_hash(onchain_blacklist_accounts);
       ret.submitted_hash = my->get_submitted_hash();
       ret.msg = "";
-      if(res.local_hash != ret.ecaf_hash) {
-         ret.msg += "local and ecaf hash MISMATCH!"
-      } else if(res.local_hash != ret.submitted_hash) {
-         ret.msg += "local and submitted hash MISMATCH!"
+      if(ret.local_hash != ret.ecaf_hash) {
+         ret.msg += "local and ecaf hash MISMATCH!";
+      } else if(ret.local_hash != ret.submitted_hash) {
+         ret.msg += "local and submitted hash MISMATCH!";
       } else {
          ret.msg += "OK";
       }
