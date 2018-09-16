@@ -154,7 +154,7 @@ namespace eosio {
          }
 
         bool send_sethash_transaction(int retry = 0){
-            bool result;
+            bool ret = false;
             auto& plugin = app().get_plugin<chain_plugin>();
 
             auto chainid = plugin.get_chain_id();
@@ -163,12 +163,12 @@ namespace eosio {
             controller& cc = plugin.chain();
             auto* account_obj = cc.db().find<chain::account_object, chain::by_name>(blacklist_contract);
             if(account_obj == nullptr)
-               return;
+               return ret;
             abi_def abi;
             if (!abi_serializer::to_abi(account_obj->abi, abi))
-               return;
+               return ret;
             if(!producer_name)
-               return;
+               return ret;
             abi_serializer eosio_serializer(abi, abi_serializer_max_time);
             chain::signed_transaction trx;
             chain::action act;
@@ -187,13 +187,12 @@ namespace eosio {
             plugin.accept_transaction( chain::packed_transaction(trx),[=](const fc::static_variant<fc::exception_ptr, chain::transaction_trace_ptr>& result){
               if (result.contains<fc::exception_ptr>()) {
                 elog("sethash failed: ${err}", ("err", result.get<fc::exception_ptr>()->to_detail_string()));
-                result = false;
               } else {
                 dlog("sethash success");
-                result = true;
+                ret = true;
               }
             });
-            return result;
+            return ret;
         }
 
 
@@ -206,7 +205,7 @@ namespace eosio {
 
    submit_hash_result blacklist_plugin::submit_hash() {
       submit_hash_result ret;
-      result = my->send_sethash_transaction();
+      bool result = my->send_sethash_transaction();
       ret.msg = result?"SUCCESS":"FAILED, check your nodeos log for error msg";
       return ret;
    }
