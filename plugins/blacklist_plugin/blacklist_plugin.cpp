@@ -134,7 +134,7 @@ namespace eosio {
             for ( auto &row : rows ) {
               if (row["type"] == "actor-blacklist") {
                  for ( auto &account : row["accounts"].get_array() ) {
-                    //ilog("account: ${a}\n", ("a", account));
+                    ilog("\naccount: ${a}", ("a", account));
                     accounts.push_back(account.as_string());
                  }
               }
