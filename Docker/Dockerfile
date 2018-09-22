@@ -1,4 +1,4 @@
-FROM eosio/builder as builder
+FROM eosio/builder:elastic as builder
 ARG branch=laomao/elasticsearch-plugin
 ARG symbol=SYS
 
