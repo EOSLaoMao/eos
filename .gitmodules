@@ -30,3 +30,6 @@
 [submodule "libraries/wabt"]
 	path = libraries/wabt
 	url = http://github.com/EOSIO/wabt
+[submodule "plugins/elasticsearch_plugin"]
+	path = plugins/elasticsearch_plugin
+	url = https://github.com/EOSLaoMao/elasticsearch_plugin.git
